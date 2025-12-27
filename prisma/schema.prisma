@@ -1,0 +1,572 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+
+
+model HomeSlider {
+  id          String   @id @default(cuid())
+  title       String
+  subtitle    String?
+  description String?
+  smallText   String?
+  offerText   String?
+  buttonText  String?
+  buttonLink  String?
+  layout      String?   @default("null")
+  bgImage     String?  // Made optional
+  image       String?  // Already optional
+  imagePublicId String?
+  bgImagePublicId String?
+  isActive    Boolean  @default(true)
+  order       Int      @default(0)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("home_sliders")
+}
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  password        String
+  name            String
+  role            UserRole  @default(CUSTOMER)
+  avatar          String?
+  isActive        Boolean   @default(true)
+  emailVerified   DateTime?
+  
+  resetToken      String?
+  resetTokenExpiry DateTime?
+  
+  phone           String?   @unique
+  otpSecret       String?
+  otpExpiry       DateTime?
+  otpAttempts     Int       @default(0)  // Add this field
+  isPhoneVerified Boolean   @default(false)
+  
+  isApproved      Boolean   @default(false)
+  approvedAt      DateTime?
+  approvedBy      String?
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  addresses       Address[]
+  contacts        Contact[]
+  orders          Order[]
+  ratings         Rating[]
+  helpfulRatings HelpfulRating[]
+
+  wholesalerProfile WholesalerProfile?
+  customDesigns   CustomDesign[]
+
+  @@map("users")
+}
+
+model WholesalerProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  businessType BusinessType
+  companyName String?
+  gstNumber   String?   @unique
+  websiteUrl  String?
+  instagramUrl String?
+  shopPhotos  String[]
+  city        String?
+  state       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("wholesaler_profiles")
+}
+
+model Category {
+  id            String    @id @default(cuid())
+  name          String    @unique
+  description   String?
+  image         String?
+  imagePublicId String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  products      Product[]
+  subcategories Subcategory[]
+
+  @@map("categories")
+}
+
+model Subcategory {
+  id             String    @id @default(cuid())
+  name           String
+  description    String?
+  image          String?
+  imagePublicId  String?
+  isActive       Boolean   @default(true)
+
+  // 🔹 OPTIONAL FK
+  categoryId     String?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // 🔹 OPTIONAL relation
+  category       Category? @relation(fields: [categoryId], references: [id])
+
+  products       Product[]
+  quantityPrices SubcategoryQuantityPrice[]
+
+  @@map("subcategories")
+}
+
+
+model SubcategoryQuantityPrice {
+  id            String   @id @default(cuid())
+  subcategoryId String
+  quantity      Int      // 2, 3, 4, etc.
+  priceType     PriceType @default(PERCENTAGE) // PERCENTAGE or FIXED_AMOUNT
+  value         Float    // 10 (percentage) or 50 (fixed amount)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  subcategory   Subcategory @relation(fields: [subcategoryId], references: [id], onDelete: Cascade)
+  
+  @@unique([subcategoryId, quantity])
+  @@map("subcategory_quantity_prices")
+}
+
+model ProductDetail {
+  id          String   @id @default(cuid())
+  productId   String
+  title       String
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_details")
+}
+
+model Product {
+  id              String       @id @default(cuid())
+  name            String
+  productCode     String       @unique
+  description     String?
+  normalPrice     Float
+  offerPrice      Float?
+  wholesalePrice  Float?
+  
+  categoryId      String?
+  subcategoryId   String?
+  
+  status          ProductStatus @default(ACTIVE)
+  
+  isBestSeller    Boolean      @default(false)
+  isNewArrival    Boolean      @default(false)
+  featured        Boolean      @default(false)
+  
+  // Customization support
+  isCustomizable  Boolean      @default(false)
+  baseCustomizationPrice Float? @default(0)
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  category        Category?     @relation(fields: [categoryId], references: [id])
+  subcategory     Subcategory? @relation(fields: [subcategoryId], references: [id])
+  images          ProductImage[]
+  variants        ProductVariant[]
+  ratings         Rating[]
+  orderItems      OrderItem[]
+  productDetails  ProductDetail[]
+  customizations  ProductCustomization[]
+
+  @@map("products")
+}
+
+model ProductImage {
+  id          String   @id @default(cuid())
+  productId   String
+  imageUrl    String
+  imagePublicId String?
+  isPrimary   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_images")
+}
+
+model ProductVariant {
+  id          String   @id @default(cuid())
+  productId   String
+  color       String
+  size        String
+  stock       Int      @default(0)
+  sku         String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  variantImages ProductVariantImage[]
+  orderItems   OrderItem[]
+
+  @@map("product_variants")
+} 
+
+model ProductVariantImage {
+  id          String   @id @default(cuid())
+  variantId   String
+  imageUrl    String
+  imagePublicId String?
+  isPrimary   Boolean  @default(false)
+  color       String
+  createdAt   DateTime @default(now())
+  
+  variant     ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@map("product_variant_images")
+}
+
+
+model HelpfulRating {
+  id        String   @id @default(cuid())
+  ratingId  String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rating Rating @relation(fields: [ratingId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@unique([ratingId, userId])
+  @@map("helpful_ratings")
+  @@index([ratingId])
+  @@index([userId])
+}
+
+model Rating {
+  id           String          @id @default(cuid())
+  productId    String
+  userId       String
+  userName     String
+  userEmail    String
+  rating       Int             // 1-5
+  title        String?
+  review       String?
+  isApproved   Boolean         @default(false)
+  helpfulCount Int             @default(0)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  product      Product         @relation(fields: [productId], references: [id])
+  user         User            @relation(fields: [userId], references: [id])
+  helpfuls     HelpfulRating[]
+
+  @@map("ratings")
+  @@index([productId])
+  @@index([userId])
+  @@index([isApproved])
+  @@index([createdAt])
+}
+
+
+model Contact {
+  id          String        @id @default(cuid())
+  name        String
+  phone       String?
+  email       String
+  message     String
+  status      ContactStatus @default(PENDING)
+  adminNotes  String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  userId      String?
+  users       User?         @relation(fields: [userId], references: [id])
+
+  @@map("contacts")
+}
+
+
+model Order {
+  id               String        @id @default(cuid())
+  orderNumber      String        @unique
+  userId           String?       // Change to optional
+  name             String
+  email            String
+  phone            String
+  address          String
+  city             String
+  state            String
+  pincode          String
+  status           OrderStatus   @default(PENDING)
+  totalAmount      Float
+  subtotal         Float
+  discount         Float         @default(0)
+  shippingCost     Float         @default(0)
+  paymentStatus    PaymentStatus @default(PENDING)
+  paymentMethod    String
+  
+  // Razorpay fields
+  razorpayOrderId     String?   @unique
+  razorpayPaymentId   String?   @unique
+  razorpaySignature   String?
+  
+  customImages OrderCustomImage[]
+
+  couponId         String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  orderItems       OrderItem[]
+  user             User?         @relation(fields: [userId], references: [id], onDelete: SetNull) // Make optional
+  coupon           Coupon?       @relation(fields: [couponId], references: [id])
+
+  trackingNumber   String?
+  carrier          String?
+  trackingUrl      String?
+  estimatedDelivery DateTime?
+  shippedAt       DateTime?
+  deliveredAt     DateTime?
+  
+  trackingHistory TrackingHistory[]
+
+  @@map("orders")
+}
+
+model OrderCustomImage {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  imageUrl    String   // S3 URL
+  imageKey    String   // S3 key for deletion
+  filename    String   // Original filename
+  description String?  // Optional description
+  
+  createdAt   DateTime @default(now())
+  
+  @@map("order_custom_images")
+  @@index([orderId])
+}
+
+
+model OrderItem {
+  id                String          @id @default(cuid())
+  orderId           String
+  productId         String
+  productVariantId  String?
+  quantity          Int
+  price             Float
+  customDesignId    String?         @unique
+  customizationPrice Float?         @default(0)
+  createdAt         DateTime        @default(now())
+  
+  order             Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product           Product         @relation(fields: [productId], references: [id])
+  productVariant    ProductVariant? @relation(fields: [productVariantId], references: [id])
+  customDesign      CustomDesign?   @relation(fields: [customDesignId], references: [id])
+
+  @@map("order_items")
+}
+
+
+
+model CustomDesign {
+  id          String   @id @default(cuid())
+  customizationId String
+  userId      String?
+  sessionId   String?
+  
+  designData  Json
+  previewImage String
+  thumbnailImage String
+  
+  status      DesignStatus @default(DRAFT)
+  
+  orderItemId String?      @unique
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  customization ProductCustomization @relation(fields: [customizationId], references: [id])
+  user        User?     @relation(fields: [userId], references: [id])
+  orderItem   OrderItem? // Remove the @relation attribute here
+  
+  @@map("custom_designs")
+}
+
+model TrackingHistory {
+  id          String   @id @default(cuid())
+  orderId     String
+  status      String  
+  location    String? 
+  description String
+  createdAt   DateTime @default(now())
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("tracking_history")
+}
+
+model Address {
+  id        String   @id @default(cuid())
+  userId    String 
+  street    String
+  city      String
+  state     String
+  country   String
+  zipCode   String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("addresses")
+}
+
+model Coupon {
+  id             String       @id @default(cuid())
+  code           String       @unique
+  description    String?
+  discountType   DiscountType
+  discountValue  Float
+  minOrderAmount Float?       @default(0)
+  maxDiscount    Float?
+  usageLimit     Int?
+  usedCount      Int          @default(0)
+  totalDiscounts Float        @default(0)
+  validFrom      DateTime
+  validUntil     DateTime
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  orders         Order[]
+
+  @@map("coupons")
+}
+
+// Customization Models
+model ProductCustomization {
+  id          String   @id @default(cuid())
+  productId   String
+  name        String
+  basePrice   Float
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  maxTextLength   Int       @default(100)
+  maxImages       Int       @default(5)
+  allowedFonts    String[]
+  allowedColors   String[]
+  
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  designs     CustomDesign[]
+  
+  @@map("product_customizations")
+}
+
+
+model FAQ {
+  id          String     @id @default(cuid())
+  question    String
+  answer      String
+  category    FAQCategory @default(GENERAL)
+  order       Int        @default(0)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@map("faqs")
+  @@index([category])
+  @@index([order])
+  @@index([isActive])
+}
+
+
+enum FAQCategory {
+  GENERAL
+  ORDERS
+  SHIPPING
+  RETURNS
+  PAYMENTS
+  PRODUCTS
+  CUSTOMIZATION
+  WHOLESALE
+  ACCOUNT
+}
+// Enums
+enum UserRole {
+  ADMIN
+  CUSTOMER
+  WHOLESALER
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ContactStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum PriceType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  OUT_OF_STOCK
+}
+
+enum BusinessType {
+  CLOTHING_STORE
+  GST_BUSINESS
+  WEBSITE
+  INSTAGRAM_PAGE
+  STARTUP
+}
+
+enum DesignStatus {
+  DRAFT
+  SAVED
+  ORDERED
+  ARCHIVED
+}
