@@ -15,6 +15,7 @@ import customizationService from './customizationService.js';
 import designService from './designService.js';
 import s3UploadService from './s3UploadService.js';
 import faqService from './faqService.js';
+import designInquiryService from './designInquiryService.js';
 
 export {
   authService,
@@ -32,5 +33,6 @@ export {
   customizationService,
   designService,
   s3UploadService,
-  faqService
+  faqService,
+  designInquiryService
 };

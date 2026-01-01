@@ -196,6 +196,26 @@ class s3UploadService {
     }
   }
 
+    async uploadInquiryImage(buffer, inquiryId = null) {
+    try {
+      const fileName = inquiryId ? 
+        `inquiry/inquiry-${inquiryId}-${Date.now()}.jpg` :
+        `inquiry/${uuidv4()}-${Date.now()}.jpg`;
+      
+      return await this.uploadImage(
+        buffer, 
+        'inquiry', 
+        fileName
+      );
+    } catch (error) {
+      logger.error('Inquiry image upload failed', {
+        inquiryId,
+        error: error.message
+      });
+      throw new Error(`inquiry image upload failed: ${error.message}`);
+    }
+  }
+
   /**
    * Upload product image
    */

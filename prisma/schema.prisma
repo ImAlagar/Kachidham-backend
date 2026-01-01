@@ -71,6 +71,7 @@ model User {
   orders          Order[]
   ratings         Rating[]
   helpfulRatings HelpfulRating[]
+  designInquiry  DesignInquiry[]
 
   wholesalerProfile WholesalerProfile?
   customDesigns   CustomDesign[]
@@ -509,6 +510,29 @@ enum FAQCategory {
   WHOLESALE
   ACCOUNT
 }
+
+model DesignInquiry {
+  id                String   @id @default(cuid())
+  name              String
+  contactNumber     String
+  whatsappNumber    String?
+  referencePicture  String?  // URL to uploaded picture
+  fabricSource      String   // Could be "to_be_sourced" or "already_available"
+  fabricDetails     String?  // Details if fabric already available
+  preferredDate     DateTime
+  preferredTime     String   // Like "10:00 AM"
+  status            String   @default("NEW") // Add this field
+  adminNotes        String?  // Add this field
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Add the userId field before the relation
+  userId            String?  // Make it optional
+  user              User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("design_inquiries")
+}
+
 // Enums
 enum UserRole {
   ADMIN

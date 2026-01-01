@@ -18,6 +18,7 @@ import designRoutes from './designRoutes.js';
 import imageProxyRoutes from './imageProxy.js';
 import uploadRoutes from './uploadRoutes.js';
 import faqRoutes from './faqRoutes.js'; // Add this import
+import designInquiryRoutes from './designInquiryRoutes.js'; // Add this import
 
 // ✅ ADD THIS NEW IMPORT
 import subcategoryQuantityPriceRoutes from './subcategoryQuantityPriceRoutes.js';
@@ -41,5 +42,6 @@ router.use('/upload', uploadRoutes);
 router.use('/faqs', faqRoutes); // Add this line
 // ✅ ADD THIS NEW ROUTE
 router.use('/admin/subcategory-quantity-prices', subcategoryQuantityPriceRoutes);
+router.use('/design-inquiries', designInquiryRoutes); // Add this line
 
 export default router;

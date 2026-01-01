@@ -1256,3 +1256,170 @@ export const validateBulkFaqOrder = validate([
     .notEmpty().withMessage('FAQ order is required')
     .isInt({ min: 0 }).withMessage('FAQ order must be a positive integer')
 ]);
+
+
+
+
+
+
+
+// Simple Design Inquiry validation
+export const validateDesignInquiry = [
+  body('name')
+    .trim()
+    .notEmpty()
+    .withMessage('Name is required'),
+    
+  body('contactNumber')
+    .trim()
+    .notEmpty()
+    .withMessage('Contact number is required'),
+    
+  body('fabricSource')
+    .trim()
+    .notEmpty()
+    .withMessage('Fabric source is required'),
+    
+  body('preferredDate')
+    .notEmpty()
+    .withMessage('Preferred date is required'),
+    
+  body('preferredTime')
+    .trim()
+    .notEmpty()
+    .withMessage('Preferred time is required'),
+    
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+    next();
+  }
+];
+
+// Simple Design Inquiry status update validation
+export const validateDesignInquiryStatus = [
+  body('status')
+    .trim()
+    .notEmpty()
+    .withMessage('Status is required'),
+    
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+    next();
+  }
+];
+
+// Design Inquiry update validation (for admin)
+export const validateDesignInquiryUpdate = [
+  body('name')
+    .optional()
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .withMessage('Name must be between 2 and 100 characters'),
+    
+  body('contactNumber')
+    .optional()
+    .trim()
+    .matches(/^[0-9]{10}$/)
+    .withMessage('Contact number must be 10 digits'),
+    
+  body('whatsappNumber')
+    .optional()
+    .trim()
+    .matches(/^[0-9]{10}$/)
+    .withMessage('WhatsApp number must be 10 digits'),
+    
+  body('fabricSource')
+    .optional()
+    .trim()
+    .isIn(['TO_BE_SOURCED', 'ALREADY_AVAILABLE', 'to_be_sourced', 'already_available'])
+    .withMessage('Fabric source must be either "TO_BE_SOURCED" or "ALREADY_AVAILABLE"'),
+    
+  body('fabricDetails')
+    .optional()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('Fabric details must be less than 500 characters'),
+    
+  body('preferredDate')
+    .optional()
+    .isISO8601()
+    .withMessage('Preferred date must be a valid date')
+    .custom((value) => {
+      if (value) {
+        const selectedDate = new Date(value);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        if (selectedDate < today) {
+          throw new Error('Preferred date cannot be in the past');
+        }
+      }
+      return true;
+    }),
+    
+  body('preferredTime')
+    .optional()
+    .trim()
+    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]\s?(AM|PM|am|pm)?$/)
+    .withMessage('Preferred time must be in valid format (e.g., 10:00 AM)'),
+    
+  body('email')
+    .optional()
+    .trim()
+    .isEmail()
+    .withMessage('Valid email is required'),
+    
+  body('designDescription')
+    .optional()
+    .trim()
+    .isLength({ max: 1000 })
+    .withMessage('Design description must be less than 1000 characters'),
+    
+  body('quantity')
+    .optional()
+    .isInt({ min: 1, max: 1000 })
+    .withMessage('Quantity must be between 1 and 1000'),
+    
+  body('timeline')
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage('Timeline must be less than 100 characters'),
+    
+  body('budget')
+    .optional()
+    .isFloat({ min: 0, max: 1000000 })
+    .withMessage('Budget must be between 0 and 1,000,000'),
+    
+  body('status')
+    .optional()
+    .trim()
+    .isIn(['NEW', 'CONTACTED', 'IN_PROGRESS', 'QUOTED', 'CONVERTED', 'REJECTED', 'CLOSED'])
+    .withMessage('Invalid status value'),
+    
+  (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Validation failed',
+        errors: errors.array()
+      });
+    }
+    next();
+  }
+];
