@@ -5,6 +5,28 @@ import logger from '../utils/logger.js';
 import razorpayService from './razorpayService.js';
 
 class OrderService {
+
+    calculateShippingCost(state) {
+    if (!state) return 200; // Default to "Other" category
+    
+    // Normalize state name
+    const normalizedState = state.trim().toLowerCase();
+    
+    switch (normalizedState) {
+      case "tamil nadu":
+        return 80;
+      
+      case "kerala":
+      case "karnataka":
+      case "andhra pradesh":
+      case "telangana":
+        return 100;
+      
+      default:
+        return 200;
+    }
+  }
+
   generateOrderNumber() {
     const timestamp = Date.now().toString();
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -77,7 +99,7 @@ class OrderService {
   }
 
   // Enhanced order totals calculation with quantity pricing
-  async calculateOrderTotals(orderItems, couponCode = null) {
+  async calculateOrderTotals(orderItems, couponCode = null, shippingState = null) {
     let subtotal = 0;
     let quantitySavings = 0;
     
@@ -192,8 +214,9 @@ class OrderService {
       }
     }
 
-    // Free shipping for all orders
-    const shippingCost = 0;
+    // Calculate shipping cost based on state (REMOVED FREE SHIPPING)
+    const shippingCost = this.calculateShippingCost(shippingState);
+    
     const totalAmount = subtotal - couponDiscount + shippingCost;
 
     return {
@@ -201,6 +224,7 @@ class OrderService {
       quantitySavings: parseFloat(quantitySavings.toFixed(2)),
       couponDiscount: parseFloat(couponDiscount.toFixed(2)),
       shippingCost: parseFloat(shippingCost.toFixed(2)),
+      shippingState: shippingState || null,
       totalAmount: parseFloat(totalAmount.toFixed(2)),
       coupon,
       items: itemsWithPricing,
@@ -208,62 +232,62 @@ class OrderService {
     };
   }
 
-  async initiateRazorpayPayment(orderData) {
-    const {
-      userId,
-      name,
-      email,
-      phone,
-      address,
-      city,
-      state,
-      pincode,
-      orderItems,
-      couponCode,
-      customImages = []
-    } = orderData;
+async initiateRazorpayPayment(orderData) {
+  const {
+    userId,
+    name,
+    email,
+    phone,
+    address,
+    city,
+    state,
+    pincode,
+    orderItems,
+    couponCode,
+    customImages = []
+  } = orderData;
 
-    // Validate required fields
-    if (!name || !email || !phone || !address || !city || !state || !pincode) {
-      throw new Error('All shipping information fields are required');
-    }
-
-    // Calculate totals with quantity pricing
-    const totals = await this.calculateOrderTotals(orderItems, couponCode);
-
-    // Create Razorpay order
-    const razorpayOrder = await razorpayService.createOrder(
-      totals.totalAmount,
-      'INR'
-    );
-
-    // Store temporary order data
-    const tempOrderData = {
-      userId,
-      name,
-      email,
-      phone,
-      address,
-      city,
-      state,
-      pincode,
-      orderItems,
-      couponCode,
-      customImages,
-      totals,
-      razorpayOrderId: razorpayOrder.id
-    };
-
-    logger.info(`Razorpay order initiated with quantity discounts. Savings: ₹${totals.quantitySavings}`);
-
-    return {
-      razorpayOrder,
-      tempOrderData: {
-        ...tempOrderData,
-        orderNumber: this.generateOrderNumber()
-      }
-    };
+  // Validate required fields
+  if (!name || !email || !phone || !address || !city || !state || !pincode) {
+    throw new Error('All shipping information fields are required');
   }
+
+  // Calculate totals with quantity pricing AND SHIPPING (pass state)
+  const totals = await this.calculateOrderTotals(orderItems, couponCode, state);
+
+  // Create Razorpay order with total amount (includes shipping)
+  const razorpayOrder = await razorpayService.createOrder(
+    totals.totalAmount, // This now includes shipping cost
+    'INR'
+  );
+
+  // Store temporary order data
+  const tempOrderData = {
+    userId,
+    name,
+    email,
+    phone,
+    address,
+    city,
+    state,
+    pincode,
+    orderItems,
+    couponCode,
+    customImages,
+    totals,
+    razorpayOrderId: razorpayOrder.id
+  };
+
+  logger.info(`Razorpay order initiated. Subtotal: ₹${totals.subtotal}, Shipping: ₹${totals.shippingCost}, Total: ₹${totals.totalAmount}`);
+
+  return {
+    razorpayOrder,
+    tempOrderData: {
+      ...tempOrderData,
+      orderNumber: this.generateOrderNumber()
+    }
+  };
+}
 
   async verifyAndCreateOrder(paymentData) {
     const {
@@ -285,8 +309,7 @@ class OrderService {
     }
 
     // Calculate totals again to ensure consistency
-    const totals = await this.calculateOrderTotals(orderData.orderItems, orderData.couponCode);
-
+    const totals = await this.calculateOrderTotals(orderData.orderItems, orderData.couponCode, orderData.state);
     // Prepare custom images data
     const customImages = orderData.customImages || [];
 

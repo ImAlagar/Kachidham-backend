@@ -47,6 +47,7 @@
     "prisma": "^6.17.1",
     "razorpay": "^2.9.6",
     "resend": "^6.2.0",
+    "sharp": "^0.34.5",
     "twilio": "^5.10.4",
     "winston": "^3.18.3",
     "winston-daily-rotate-file": "^5.0.0"

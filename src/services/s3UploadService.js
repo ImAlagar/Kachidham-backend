@@ -216,6 +216,16 @@ class s3UploadService {
     }
   }
 
+    async uploadReviewImage(buffer, productId, userId) {
+    const fileName = `reviews/product-${productId}/user-${userId}-${Date.now()}.jpg`;
+    
+    return await this.uploadImage(buffer, 'reviews', fileName, {
+      maxWidth: 800,
+      maxHeight: 800,
+      quality: 85
+    });
+  }
+
   /**
    * Upload product image
    */

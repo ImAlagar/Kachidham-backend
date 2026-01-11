@@ -75,6 +75,8 @@ model User {
 
   wholesalerProfile WholesalerProfile?
   customDesigns   CustomDesign[]
+  discountUsage   DiscountUsage[] // Add this relation
+
 
   @@map("users")
 }
@@ -109,6 +111,8 @@ model Category {
   updatedAt     DateTime  @updatedAt
   products      Product[]
   subcategories Subcategory[]
+  discounts     Discount[] // Add this relation
+
 
   @@map("categories")
 }
@@ -132,6 +136,7 @@ model Subcategory {
 
   products       Product[]
   quantityPrices SubcategoryQuantityPrice[]
+  discounts      Discount[] // Add this relation
 
   @@map("subcategories")
 }
@@ -199,6 +204,7 @@ model Product {
   orderItems      OrderItem[]
   productDetails  ProductDetail[]
   customizations  ProductCustomization[]
+  discounts       Discount[]   // Add this relation
 
   @@map("products")
 }
@@ -269,16 +275,18 @@ model Rating {
   userId       String
   userName     String
   userEmail    String
-  rating       Int             // 1-5
+  rating       Int
   title        String?
   review       String?
   isApproved   Boolean         @default(false)
   helpfulCount Int             @default(0)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
+  
   product      Product         @relation(fields: [productId], references: [id])
   user         User            @relation(fields: [userId], references: [id])
   helpfuls     HelpfulRating[]
+  images       RatingImage[]   // Add this relation for multiple images
 
   @@map("ratings")
   @@index([productId])
@@ -287,6 +295,19 @@ model Rating {
   @@index([createdAt])
 }
 
+model RatingImage {
+  id          String   @id @default(cuid())
+  ratingId    String
+  imageUrl    String
+  imagePublicId String
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  
+  rating      Rating   @relation(fields: [ratingId], references: [id], onDelete: Cascade)
+
+  @@map("rating_images")
+  @@index([ratingId])
+}
 
 model Contact {
   id          String        @id @default(cuid())
@@ -337,6 +358,9 @@ model Order {
   orderItems       OrderItem[]
   user             User?         @relation(fields: [userId], references: [id], onDelete: SetNull) // Make optional
   coupon           Coupon?       @relation(fields: [couponId], references: [id])
+
+  discountUsage   DiscountUsage[] // Add this relation
+
 
   trackingNumber   String?
   carrier          String?
@@ -531,6 +555,80 @@ model DesignInquiry {
   user              User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("design_inquiries")
+}
+
+model Discount {
+  id              String         @id @default(cuid())
+  name            String
+  description     String?
+  discountType    DiscountType   @default(PERCENTAGE)
+  discountValue   Float
+  
+  // For product-specific discounts
+  productId       String?
+  
+  // For quantity-based discounts (buy 2, buy 3, etc.)
+  minQuantity     Int?           // For buy 2, buy 3 offers
+  
+  // For category/subcategory discounts
+  categoryId      String?
+  subcategoryId   String?
+  
+  // For user-specific discounts (wholesaler, etc.)
+  userType        UserRole?      // ADMIN, CUSTOMER, WHOLESALER
+  
+  // Validity and limits
+  minOrderAmount  Float?         @default(0)
+  maxDiscount     Float?         // Maximum discount amount
+  usageLimit      Int?           // Total usage limit
+  perUserLimit    Int?           @default(1) // Times a single user can use
+  
+  // Date validity
+  validFrom       DateTime
+  validUntil      DateTime
+  
+  // Activation
+  isActive        Boolean        @default(true)
+  
+  // Tracking
+  usedCount       Int            @default(0)
+  totalDiscounts  Float          @default(0) // Total discount given
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  
+  // Relations
+  product         Product?       @relation(fields: [productId], references: [id])
+  category        Category?      @relation(fields: [categoryId], references: [id])
+  subcategory     Subcategory?   @relation(fields: [subcategoryId], references: [id])
+  discountUsage   DiscountUsage[]
+  
+  @@map("discounts")
+  @@index([productId])
+  @@index([categoryId])
+  @@index([subcategoryId])
+  @@index([userType])
+  @@index([isActive])
+  @@index([validFrom, validUntil])
+}
+
+model DiscountUsage {
+  id          String    @id @default(cuid())
+  discountId  String
+  userId      String
+  orderId     String
+  discountAmount Float
+  createdAt   DateTime  @default(now())
+  
+  discount    Discount  @relation(fields: [discountId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
+  order       Order     @relation(fields: [orderId], references: [id])
+  
+  @@unique([discountId, orderId]) // Prevent double usage on same order
+  @@map("discount_usage")
+  @@index([discountId])
+  @@index([userId])
+  @@index([orderId])
 }
 
 // Enums

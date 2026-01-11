@@ -35,8 +35,9 @@ export const getRatingById = asyncHandler(async (req, res) => {
 export const createRating = asyncHandler(async (req, res) => {
   const ratingData = req.body;
   const userId = req.user.id;
+  const files = req.files; // Now gets array of files
   
-  const rating = await ratingService.createRating(ratingData, userId);
+  const rating = await ratingService.createRating(ratingData, userId, files || []);
   
   res.status(201).json({
     success: true,
@@ -45,13 +46,14 @@ export const createRating = asyncHandler(async (req, res) => {
   });
 });
 
-// Update rating (User can update their own rating)
+// Update rating - Updated for multiple files
 export const updateRating = asyncHandler(async (req, res) => {
   const { ratingId } = req.params;
   const updateData = req.body;
   const userId = req.user.id;
+  const files = req.files; // Now gets array of files
   
-  const updatedRating = await ratingService.updateRating(ratingId, updateData, userId);
+  const updatedRating = await ratingService.updateRating(ratingId, updateData, userId, files || []);
   
   res.status(200).json({
     success: true,
@@ -59,7 +61,6 @@ export const updateRating = asyncHandler(async (req, res) => {
     data: updatedRating
   });
 });
-
 // Delete rating (User can delete their own rating, Admin can delete any)
 export const deleteRating = asyncHandler(async (req, res) => {
   const { ratingId } = req.params;
@@ -71,6 +72,18 @@ export const deleteRating = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Rating deleted successfully'
+  });
+});
+
+export const deleteRatingImage = asyncHandler(async (req, res) => {
+  const { imageId } = req.params;
+  const userId = req.user.id;
+  
+  await ratingService.deleteRatingImage(imageId, userId);
+  
+  res.status(200).json({
+    success: true,
+    message: 'Image deleted successfully'
   });
 });
 
