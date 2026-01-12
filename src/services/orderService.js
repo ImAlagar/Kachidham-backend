@@ -3,6 +3,7 @@ import emailNotificationService from './emailNotificationService.js';
 import phonepeService from './phonepeService.js';
 import logger from '../utils/logger.js';
 import razorpayService from './razorpayService.js';
+import discountService from './discountService.js';
 
 class OrderService {
 
@@ -99,195 +100,232 @@ class OrderService {
   }
 
   // Enhanced order totals calculation with quantity pricing
-  async calculateOrderTotals(orderItems, couponCode = null, shippingState = null) {
-    let subtotal = 0;
-    let quantitySavings = 0;
-    
-    if (!orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
-      throw new Error('Order items are required and must be a non-empty array');
+async calculateOrderTotals(orderItems, discountCode = null, shippingState = null, userId = null) {
+  let subtotal = 0;
+  let quantitySavings = 0;
+  
+  if (!orderItems || !Array.isArray(orderItems) || orderItems.length === 0) {
+    throw new Error('Order items are required and must be a non-empty array');
+  }
+
+  const itemsWithPricing = [];
+
+  // Calculate subtotal with quantity pricing
+  for (const item of orderItems) {
+    if (!item.productId || !item.quantity || item.quantity <= 0) {
+      throw new Error('Invalid order item: productId and quantity are required');
     }
 
-    const itemsWithPricing = [];
-
-    // Calculate subtotal with quantity pricing
-    for (const item of orderItems) {
-      if (!item.productId || !item.quantity || item.quantity <= 0) {
-        throw new Error('Invalid order item: productId and quantity are required');
+    // Get product details
+    const product = await prisma.product.findUnique({
+      where: { id: item.productId },
+      select: {
+        id: true,
+        name: true,
+        normalPrice: true,
+        offerPrice: true,
+        wholesalePrice: true,
+        status: true,
+        subcategoryId: true,
+        productCode: true
       }
+    });
 
-      // Get product details
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId },
-        select: {
+    if (!product) {
+      throw new Error(`Product not found: ${item.productId}`);
+    }
+
+    if (product.status !== 'ACTIVE') {
+      throw new Error(`Product ${product.id} is not available for purchase`);
+    }
+
+    // Check variant stock and get variant-specific price if exists
+    let variant = null;
+    let variantPrice = null;
+    let variantDetails = null;
+    
+    if (item.productVariantId) {
+      variant = await prisma.productVariant.findUnique({
+        where: { id: item.productVariantId },
+        select: { 
           id: true,
-          name: true,
-          normalPrice: true,
-          offerPrice: true,
-          wholesalePrice: true,
-          status: true,
-          subcategoryId: true
+          stock: true,
+          price: true, // This will now work after schema update
+          color: true,
+          size: true,
+          sku: true
         }
       });
 
-      if (!product) {
-        throw new Error(`Product not found: ${item.productId}`);
+      if (!variant) {
+        throw new Error(`Product variant not found: ${item.productVariantId}`);
       }
 
-      if (product.status !== 'ACTIVE') {
-        throw new Error(`Product ${product.id} is not available for purchase`);
+      if (variant.stock < item.quantity) {
+        throw new Error(`Insufficient stock for variant ${item.productVariantId}. Available: ${variant.stock}, Requested: ${item.quantity}`);
       }
 
-      // Check variant stock if provided
-      let variant = null;
-      if (item.productVariantId) {
-        variant = await prisma.productVariant.findUnique({
-          where: { id: item.productVariantId },
-          select: { 
-            stock: true
-          }
-        });
+      variantPrice = variant.price;
+      variantDetails = {
+        id: variant.id,
+        color: variant.color,
+        size: variant.size,
+        sku: variant.sku
+      };
+    }
 
-        if (!variant) {
-          throw new Error(`Product variant not found: ${item.productVariantId}`);
-        }
+    // Calculate base price: variant price overrides product price if exists
+    // Convert Decimal to Number for calculations
+    let basePrice;
+    if (variantPrice !== null && variantPrice !== undefined) {
+      basePrice = Number(variantPrice);
+    } else {
+      // Use product offer price or normal price
+      basePrice = product.offerPrice ? Number(product.offerPrice) : Number(product.normalPrice);
+    }
 
-        if (variant.stock < item.quantity) {
-          throw new Error(`Insufficient stock for variant ${item.productVariantId}. Available: ${variant.stock}, Requested: ${item.quantity}`);
-        }
-      }
+    // Calculate price with quantity discounts
+    const quantityPriceCalculation = await this.calculateItemQuantityPrice(
+      product.id,
+      product.subcategoryId,
+      basePrice,
+      item.quantity
+    );
 
-      // Calculate price with quantity discounts
-      const basePrice = product.offerPrice || product.normalPrice;
-      const quantityPriceCalculation = await this.calculateItemQuantityPrice(
-        product.id,
-        product.subcategoryId,
-        basePrice,
-        item.quantity
+    const itemTotal = quantityPriceCalculation.finalPrice;
+    const itemSavings = quantityPriceCalculation.totalSavings;
+
+    subtotal += itemTotal;
+    quantitySavings += itemSavings;
+
+    itemsWithPricing.push({
+      ...item,
+      product: {
+        id: product.id,
+        name: product.name,
+        productCode: product.productCode,
+        normalPrice: Number(product.normalPrice),
+        offerPrice: product.offerPrice ? Number(product.offerPrice) : null,
+        wholesalePrice: product.wholesalePrice ? Number(product.wholesalePrice) : null
+      },
+      variant: variantDetails,
+      basePrice,
+      quantityPricing: quantityPriceCalculation,
+      itemTotal,
+      itemSavings
+    });
+  }
+
+  // Calculate coupon/discount using DiscountService
+  let discountAmount = 0;
+  let appliedDiscounts = [];
+  let discountError = null;
+  
+  if (discountCode) {
+    try {
+      const discountResult = await discountService.calculateCartDiscounts(
+        itemsWithPricing.map(item => ({
+          product: item.product,
+          quantity: item.quantity,
+          productId: item.productId,
+          variantId: item.productVariantId
+        })),
+        userId,
+        discountCode
       );
-
-      const itemTotal = quantityPriceCalculation.finalPrice;
-      const itemSavings = quantityPriceCalculation.totalSavings;
-
-      subtotal += itemTotal;
-      quantitySavings += itemSavings;
-
-      itemsWithPricing.push({
-        ...item,
-        product,
-        variant,
-        basePrice,
-        quantityPricing: quantityPriceCalculation,
-        itemTotal,
-        itemSavings
-      });
-    }
-
-    // Calculate coupon discount
-    let couponDiscount = 0;
-    let coupon = null;
-    
-    if (couponCode) {
-      coupon = await prisma.coupon.findFirst({
-        where: {
-          code: couponCode,
-          isActive: true,
-          validFrom: { lte: new Date() },
-          validUntil: { gte: new Date() },
-          OR: [
-            { usageLimit: null },
-            { usageLimit: { gt: prisma.coupon.fields.usedCount } }
-          ]
-        }
-      });
-
-      if (coupon) {
-        if (subtotal >= (coupon.minOrderAmount || 0)) {
-          if (coupon.discountType === 'PERCENTAGE') {
-            couponDiscount = (subtotal * coupon.discountValue) / 100;
-            if (coupon.maxDiscount && couponDiscount > coupon.maxDiscount) {
-              couponDiscount = coupon.maxDiscount;
-            }
-          } else {
-            couponDiscount = coupon.discountValue;
-          }
-        }
+      
+      discountAmount = discountResult.totalDiscount;
+      appliedDiscounts = discountResult.appliedDiscounts;
+      
+      if (discountResult.errors) {
+        discountError = discountResult.errors.join(', ');
       }
+    } catch (error) {
+      discountError = error.message;
     }
-
-    // Calculate shipping cost based on state (REMOVED FREE SHIPPING)
-    const shippingCost = this.calculateShippingCost(shippingState);
-    
-    const totalAmount = subtotal - couponDiscount + shippingCost;
-
-    return {
-      subtotal: parseFloat(subtotal.toFixed(2)),
-      quantitySavings: parseFloat(quantitySavings.toFixed(2)),
-      couponDiscount: parseFloat(couponDiscount.toFixed(2)),
-      shippingCost: parseFloat(shippingCost.toFixed(2)),
-      shippingState: shippingState || null,
-      totalAmount: parseFloat(totalAmount.toFixed(2)),
-      coupon,
-      items: itemsWithPricing,
-      hasQuantityDiscounts: quantitySavings > 0
-    };
   }
 
-async initiateRazorpayPayment(orderData) {
-  const {
-    userId,
-    name,
-    email,
-    phone,
-    address,
-    city,
-    state,
-    pincode,
-    orderItems,
-    couponCode,
-    customImages = []
-  } = orderData;
-
-  // Validate required fields
-  if (!name || !email || !phone || !address || !city || !state || !pincode) {
-    throw new Error('All shipping information fields are required');
-  }
-
-  // Calculate totals with quantity pricing AND SHIPPING (pass state)
-  const totals = await this.calculateOrderTotals(orderItems, couponCode, state);
-
-  // Create Razorpay order with total amount (includes shipping)
-  const razorpayOrder = await razorpayService.createOrder(
-    totals.totalAmount, // This now includes shipping cost
-    'INR'
-  );
-
-  // Store temporary order data
-  const tempOrderData = {
-    userId,
-    name,
-    email,
-    phone,
-    address,
-    city,
-    state,
-    pincode,
-    orderItems,
-    couponCode,
-    customImages,
-    totals,
-    razorpayOrderId: razorpayOrder.id
-  };
-
-  logger.info(`Razorpay order initiated. Subtotal: ₹${totals.subtotal}, Shipping: ₹${totals.shippingCost}, Total: ₹${totals.totalAmount}`);
+  // Calculate shipping cost
+  const shippingCost = this.calculateShippingCost(shippingState);
+  
+  const totalAmount = subtotal - discountAmount + shippingCost;
 
   return {
-    razorpayOrder,
-    tempOrderData: {
-      ...tempOrderData,
-      orderNumber: this.generateOrderNumber()
-    }
+    subtotal: parseFloat(subtotal.toFixed(2)),
+    quantitySavings: parseFloat(quantitySavings.toFixed(2)),
+    discountAmount: parseFloat(discountAmount.toFixed(2)),
+    appliedDiscounts,
+    shippingCost: parseFloat(shippingCost.toFixed(2)),
+    shippingState: shippingState || null,
+    totalAmount: parseFloat(totalAmount.toFixed(2)),
+    items: itemsWithPricing,
+    hasQuantityDiscounts: quantitySavings > 0,
+    discountError
   };
 }
+
+
+  async initiateRazorpayPayment(orderData) {
+    const {
+      userId,
+      name,
+      email,
+      phone,
+      address,
+      city,
+      state,
+      pincode,
+      orderItems,
+      discountCode, // Changed from couponCode to discountCode
+      customImages = []
+    } = orderData;
+
+    // Validate required fields
+    if (!name || !email || !phone || !address || !city || !state || !pincode) {
+      throw new Error('All shipping information fields are required');
+    }
+
+    // Calculate totals with quantity pricing AND SHIPPING (pass state)
+    const totals = await this.calculateOrderTotals(orderItems, discountCode, state, userId);
+
+    if (totals.discountError) {
+      throw new Error(totals.discountError);
+    }
+
+    // Create Razorpay order with total amount (includes shipping)
+    const razorpayOrder = await razorpayService.createOrder(
+      totals.totalAmount,
+      'INR'
+    );
+
+    // Store temporary order data
+    const tempOrderData = {
+      userId,
+      name,
+      email,
+      phone,
+      address,
+      city,
+      state,
+      pincode,
+      orderItems,
+      discountCode,
+      appliedDiscounts: totals.appliedDiscounts,
+      customImages,
+      totals,
+      razorpayOrderId: razorpayOrder.id
+    };
+
+    logger.info(`Razorpay order initiated. Subtotal: ₹${totals.subtotal}, Discount: ₹${totals.discountAmount}, Shipping: ₹${totals.shippingCost}, Total: ₹${totals.totalAmount}`);
+
+    return {
+      razorpayOrder,
+      tempOrderData: {
+        ...tempOrderData,
+        orderNumber: this.generateOrderNumber()
+      }
+    };
+  }
 
   async verifyAndCreateOrder(paymentData) {
     const {
@@ -309,11 +347,12 @@ async initiateRazorpayPayment(orderData) {
     }
 
     // Calculate totals again to ensure consistency
-    const totals = await this.calculateOrderTotals(orderData.orderItems, orderData.couponCode, orderData.state);
+    const totals = await this.calculateOrderTotals(orderData.orderItems, orderData.discountCode, orderData.state, orderData.userId);
+    
     // Prepare custom images data
     const customImages = orderData.customImages || [];
 
-    // Prepare order data - FIXED: Use coupon relation instead of couponId
+    // Create the order
     const orderCreateData = {
       orderNumber: this.generateOrderNumber(),
       user: {
@@ -331,21 +370,13 @@ async initiateRazorpayPayment(orderData) {
       status: 'CONFIRMED',
       totalAmount: totals.totalAmount,
       subtotal: totals.subtotal,
-      discount: totals.couponDiscount,
+      discount: totals.discountAmount,
       shippingCost: totals.shippingCost,
       paymentStatus: 'PAID',
       paymentMethod: 'ONLINE',
       razorpayOrderId: razorpay_order_id,
       razorpayPaymentId: razorpay_payment_id,
       razorpaySignature: razorpay_signature,
-      // FIXED: Use coupon relation instead of couponId
-      ...(totals.coupon && {
-        coupon: {
-          connect: {
-            id: totals.coupon.id
-          }
-        }
-      }),
       // Create custom image records if any
       ...(customImages.length > 0 && {
         customImages: {
@@ -386,17 +417,16 @@ async initiateRazorpayPayment(orderData) {
                 }
               }
             },
-        productVariant: {
-          include: {
-            variantImages: {  // Add this
-              select: {
-                imageUrl: true,
-                color: true
+            productVariant: {
+              include: {
+                variantImages: {
+                  select: {
+                    imageUrl: true,
+                    color: true
+                  }
+                }
               }
             }
-          }
-        }
-
           }
         },
         customImages: true,
@@ -406,8 +436,7 @@ async initiateRazorpayPayment(orderData) {
             name: true,
             email: true
           }
-        },
-        coupon: true
+        }
       }
     });
 
@@ -423,14 +452,37 @@ async initiateRazorpayPayment(orderData) {
       }
     }
 
-    // Increment coupon usage
-    if (totals.coupon) {
-      await prisma.coupon.update({
-        where: { id: totals.coupon.id },
-        data: {
-          usedCount: { increment: 1 }
+    // FIXED: Record discount usage if discount was applied
+    if (totals.discountAmount > 0 && orderData.discountCode) {
+      try {
+        // Record the main discount
+        await discountService.recordDiscountUsage(
+          orderData.discountCode,
+          orderData.userId,
+          order.id,
+          totals.discountAmount
+        );
+      } catch (error) {
+        logger.error(`Failed to record discount usage for ${orderData.discountCode}:`, error.message);
+      }
+    }
+
+    // Also record any product-specific discounts
+    if (totals.appliedDiscounts && totals.appliedDiscounts.length > 0) {
+      for (const discount of totals.appliedDiscounts) {
+        if (discount.code && discount.code !== orderData.discountCode) {
+          try {
+            await discountService.recordDiscountUsage(
+              discount.code,
+              orderData.userId,
+              order.id,
+              discount.amount || 0
+            );
+          } catch (error) {
+            logger.error(`Failed to record product discount usage: ${error.message}`);
+          }
         }
-      });
+      }
     }
 
     // Create tracking history
@@ -438,27 +490,28 @@ async initiateRazorpayPayment(orderData) {
       data: {
         orderId: order.id,
         status: 'CONFIRMED',
-        description: `Order confirmed and payment received. Quantity savings: ₹${totals.quantitySavings}`,
+        description: `Order confirmed and payment received. Discount: ₹${totals.discountAmount}`,
         location: `${order.city}, ${order.state}`
       }
     });
 
-    // Send email notification with quantity discount details
+    // Send email notification
     try {
       await emailNotificationService.sendOrderNotifications(order);
     } catch (emailError) {
       logger.error('Failed to send order confirmation email:', emailError);
     }
 
-    logger.info(`Order created successfully with quantity discounts. Total savings: ₹${totals.quantitySavings}`);
+    logger.info(`Order created successfully. Discount: ₹${totals.discountAmount}`);
     
-    // Return order with quantity discount info
     return {
       ...order,
       quantitySavings: totals.quantitySavings,
-      hasQuantityDiscounts: totals.hasQuantityDiscounts
+      discountAmount: totals.discountAmount,
+      appliedDiscounts: totals.appliedDiscounts
     };
   }
+
 
   async createCODOrder(orderData) {
     const {
@@ -626,7 +679,6 @@ async initiateRazorpayPayment(orderData) {
       hasQuantityDiscounts: totals.hasQuantityDiscounts
     };
   }
-
 
 
   async getAllOrders({ page, limit, status, userId, paymentStatus }) {

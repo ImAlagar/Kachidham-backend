@@ -174,7 +174,7 @@ model ProductDetail {
 model Product {
   id              String       @id @default(cuid())
   name            String
-  productCode     String       @unique
+  productCode     String?       @unique
   description     String?
   normalPrice     Float
   offerPrice      Float?
@@ -227,7 +227,9 @@ model ProductVariant {
   color       String
   size        String
   stock       Int      @default(0)
+  price       Decimal? @db.Decimal(10, 2)  // ADD THIS LINE - optional price override
   sku         String?  @unique
+  variantCodes String[]  // ADD THIS: Array of variant codes
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -633,9 +635,12 @@ model DiscountUsage {
 
 // Enums
 enum UserRole {
-  ADMIN
-  CUSTOMER
-  WHOLESALER
+  ALL
+  CUSTOMER      // Changed from CUSTOMER
+  NEW_USER     // Add this
+  LOYALTY      // Add this
+  WHOLESALER   // Keep this
+  ADMIN        // Keep this
 }
 
 enum OrderStatus {
@@ -665,6 +670,8 @@ enum ContactStatus {
 enum DiscountType {
   PERCENTAGE
   FIXED_AMOUNT
+  BUY_X_GET_Y
+  FREE_SHIPPING
 }
 
 enum PriceType {

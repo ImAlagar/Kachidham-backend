@@ -700,6 +700,703 @@ class DiscountService {
       }
     };
   }
+
+
+// Get applicable discounts for a product
+async getProductDiscounts(productId, userId = null) {
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    include: {
+      category: true,
+      subcategory: true
+    }
+  });
+
+  if (!product) {
+    throw new Error('Product not found');
+  }
+
+  const now = new Date();
+  
+  // Get all applicable discounts
+  const discounts = await prisma.discount.findMany({
+    where: {
+      OR: [
+        { productId: productId }, // Product-specific discount
+        { categoryId: product.categoryId }, // Category discount
+        { subcategoryId: product.subcategoryId }, // Subcategory discount
+        { 
+          AND: [
+            { productId: null },
+            { categoryId: null },
+            { subcategoryId: null }
+          ]
+        } // Sitewide discount
+      ],
+      isActive: true,
+      validFrom: { lte: now },
+      validUntil: { gte: now }
+    },
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          productCode: true,
+          images: {
+            take: 1,
+            select: { imageUrl: true }
+          }
+        }
+      },
+      category: {
+        select: {
+          id: true,
+          name: true,
+          image: true
+        }
+      },
+      subcategory: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          category: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
+      }
+    },
+    orderBy: [
+      { discountValue: 'desc' }, // Highest discount first
+      { createdAt: 'desc' }
+    ]
+  });
+
+  // Filter by user eligibility
+  const eligibleDiscounts = await Promise.all(
+    discounts.map(async discount => {
+      // Check user eligibility
+      if (discount.userType && discount.userType !== 'ALL' && userId) {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { role: true }
+        });
+        
+        if (user?.role !== discount.userType) {
+          return null;
+        }
+      }
+      
+      // Check per user limit
+      if (discount.perUserLimit > 0 && userId) {
+        const userUsageCount = await prisma.discountUsage.count({
+          where: {
+            discountId: discount.id,
+            userId
+          }
+        });
+        
+        if (userUsageCount >= discount.perUserLimit) {
+          return null;
+        }
+      }
+      
+      // Check usage limit
+      if (discount.usageLimit && discount.usedCount >= discount.usageLimit) {
+        return null;
+      }
+      
+      return discount;
+    })
+  );
+
+  // Remove null values and return
+  return eligibleDiscounts.filter(discount => discount !== null);
+}
+
+// Get active discounts based on filters
+async getActiveDiscounts({ userId, productId, categoryId, subcategoryId }) {
+  const now = new Date();
+  
+  const where = {
+    isActive: true,
+    validFrom: { lte: now },
+    validUntil: { gte: now }
+  };
+
+  // Add scope filters if provided
+  if (productId) {
+    where.OR = [
+      { productId: productId },
+      { 
+        AND: [
+          { productId: null },
+          { categoryId: null },
+          { subcategoryId: null }
+        ]
+      }
+    ];
+    
+    // Get product details to check category/subcategory
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+      select: { categoryId: true, subcategoryId: true }
+    });
+    
+    if (product) {
+      where.OR.push(
+        { categoryId: product.categoryId },
+        { subcategoryId: product.subcategoryId }
+      );
+    }
+  } else if (categoryId) {
+    where.OR = [
+      { categoryId: categoryId },
+      { 
+        AND: [
+          { productId: null },
+          { categoryId: null },
+          { subcategoryId: null }
+        ]
+      }
+    ];
+  } else if (subcategoryId) {
+    where.OR = [
+      { subcategoryId: subcategoryId },
+      { 
+        AND: [
+          { productId: null },
+          { categoryId: null },
+          { subcategoryId: null }
+        ]
+      }
+    ];
+  } else {
+    // Sitewide discounts
+    where.productId = null;
+    where.categoryId = null;
+    where.subcategoryId = null;
+  }
+
+  const discounts = await prisma.discount.findMany({
+    where,
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          productCode: true,
+          images: {
+            take: 1,
+            select: { imageUrl: true }
+          }
+        }
+      },
+      category: {
+        select: {
+          id: true,
+          name: true,
+          image: true
+        }
+      },
+      subcategory: {
+        select: {
+          id: true,
+          name: true,
+          image: true,
+          category: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
+      }
+    },
+    orderBy: [
+      { discountValue: 'desc' },
+      { createdAt: 'desc' }
+    ]
+  });
+
+  // Filter by user eligibility
+  const eligibleDiscounts = await Promise.all(
+    discounts.map(async discount => {
+      // Check user eligibility
+      if (discount.userType && discount.userType !== 'ALL' && userId) {
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: { role: true }
+        });
+        
+        if (user?.role !== discount.userType) {
+          return null;
+        }
+      }
+      
+      // Check per user limit
+      if (discount.perUserLimit > 0 && userId) {
+        const userUsageCount = await prisma.discountUsage.count({
+          where: {
+            discountId: discount.id,
+            userId
+          }
+        });
+        
+        if (userUsageCount >= discount.perUserLimit) {
+          return null;
+        }
+      }
+      
+      // Check usage limit
+      if (discount.usageLimit && discount.usedCount >= discount.usageLimit) {
+        return null;
+      }
+      
+      return discount;
+    })
+  );
+
+  return eligibleDiscounts.filter(discount => discount !== null);
+}
+
+// services/discountService.js - FIXED
+async calculateProductDiscount(productId, userId = null) {
+  const product = await prisma.product.findUnique({
+    where: { id: productId },
+    select: {
+      id: true,
+      normalPrice: true,    // ✅ Changed from price to normalPrice
+      offerPrice: true,
+      categoryId: true,
+      subcategoryId: true
+    }
+  });
+
+  if (!product) {
+    throw new Error('Product not found');
+  }
+
+  const applicableDiscounts = await this.getProductDiscounts(productId, userId);
+  
+  if (applicableDiscounts.length === 0) {
+    return {
+      hasDiscount: false,
+      originalPrice: product.offerPrice || product.normalPrice, // ✅ Fixed
+      finalPrice: product.offerPrice || product.normalPrice,    // ✅ Fixed
+      discountAmount: 0,
+      applicableDiscounts: []
+    };
+  }
+
+  // Calculate discount amount for each applicable discount
+  const price = product.offerPrice || product.normalPrice; // ✅ Fixed
+  const discountsWithAmount = applicableDiscounts.map(discount => {
+    let discountAmount = 0;
+    
+    if (discount.discountType === 'PERCENTAGE') {
+      discountAmount = (price * discount.discountValue) / 100;
+      if (discount.maxDiscount && discountAmount > discount.maxDiscount) {
+        discountAmount = discount.maxDiscount;
+      }
+    } else if (discount.discountType === 'FIXED_AMOUNT') {
+      discountAmount = Math.min(discount.discountValue, price);
+    } else if (discount.discountType === 'BUY_X_GET_Y') {
+      discountAmount = Math.min(discount.discountValue, price);
+    }
+    
+    return {
+      ...discount,
+      calculatedAmount: discountAmount,
+      finalPrice: Math.max(0, price - discountAmount)
+    };
+  });
+
+  // Sort by discount amount (highest first)
+  discountsWithAmount.sort((a, b) => b.calculatedAmount - a.calculatedAmount);
+  
+  const bestDiscount = discountsWithAmount[0];
+  
+  return {
+    hasDiscount: true,
+    originalPrice: price,
+    finalPrice: bestDiscount.finalPrice,
+    discountAmount: bestDiscount.calculatedAmount,
+    applicableDiscounts: discountsWithAmount,
+    bestDiscount: bestDiscount
+  };
+}
+
+// Apply discount to cart items
+  async applyDiscountToCart(cartItems, userId) {
+    let totalDiscount = 0;
+    const appliedDiscounts = [];
+    const cartWithDiscounts = [];
+
+    for (const item of cartItems) {
+      const productDiscount = await this.calculateProductDiscount(item.productId, userId);
+      
+      if (productDiscount.hasDiscount) {
+        const itemDiscount = productDiscount.discountAmount * item.quantity;
+        totalDiscount += itemDiscount;
+        
+        appliedDiscounts.push({
+          productId: item.productId,
+          discount: productDiscount.bestDiscount,
+          amount: itemDiscount,
+          perUnit: productDiscount.discountAmount
+        });
+        
+        cartWithDiscounts.push({
+          ...item,
+          originalPrice: productDiscount.originalPrice,
+          discountedPrice: productDiscount.finalPrice,
+          discountApplied: productDiscount.discountAmount,
+          discountType: productDiscount.bestDiscount.discountType,
+          discountCode: productDiscount.bestDiscount.name
+        });
+      } else {
+        cartWithDiscounts.push({
+          ...item,
+          originalPrice: item.price,
+          discountedPrice: item.price,
+          discountApplied: 0,
+          discountType: null,
+          discountCode: null
+        });
+      }
+    }
+
+    const subtotal = cartItems.reduce((sum, item) => 
+      sum + (item.price * item.quantity), 0
+    );
+    
+    const finalTotal = Math.max(0, subtotal - totalDiscount);
+
+    return {
+      subtotal,
+      totalDiscount,
+      finalTotal,
+      appliedDiscounts,
+      cartItems: cartWithDiscounts
+    };
+  }
+
+
+  // services/discountService.js - Add these methods
+async getDiscountByIdOrName(identifier) {
+  const discount = await prisma.discount.findFirst({
+    where: {
+      OR: [
+        { id: identifier },
+        { name: identifier }
+      ]
+    },
+    include: {
+      product: true,
+      category: true,
+      subcategory: true
+    }
+  });
+  
+  if (!discount) {
+    throw new Error('Discount not found');
+  }
+  
+  return discount;
+}
+
+// Calculate cart discounts
+async calculateCartDiscounts(cartItems, userId, discountCode = null) {
+  let totalDiscount = 0;
+  const appliedDiscounts = [];
+  const errors = [];
+  
+  // Validate discount code if provided
+  let discount = null;
+  if (discountCode) {
+    const validation = await this.validateDiscount(discountCode, userId);
+    if (!validation.isValid) {
+      errors.push(validation.message);
+    } else {
+      discount = validation.discount;
+    }
+  }
+  
+  // Calculate base subtotal
+  const subtotal = cartItems.reduce((sum, item) => {
+    return sum + (item.product.offerPrice || item.product.normalPrice) * item.quantity;
+  }, 0);
+  
+  // Apply discount if valid
+  let discountAmount = 0;
+  if (discount && discount.isValid) {
+    // Check minimum order amount for discount
+    if (subtotal >= discount.minOrderAmount) {
+      if (discount.discountType === 'PERCENTAGE') {
+        discountAmount = (subtotal * discount.discountValue) / 100;
+        if (discount.maxDiscount && discountAmount > discount.maxDiscount) {
+          discountAmount = discount.maxDiscount;
+        }
+      } else {
+        discountAmount = discount.discountValue;
+      }
+      
+      appliedDiscounts.push({
+        code: discountCode,
+        name: discount.name,
+        type: discount.discountType,
+        value: discount.discountValue,
+        amount: discountAmount
+      });
+      
+      totalDiscount += discountAmount;
+    } else {
+      errors.push(`Minimum order amount of ₹${discount.minOrderAmount} required for this discount`);
+    }
+  }
+  
+  // Apply product-specific discounts
+  for (const item of cartItems) {
+    const productDiscounts = await this.getProductDiscounts(item.productId, userId);
+    
+    if (productDiscounts.length > 0) {
+      // Get best discount for this product
+      const bestDiscount = this.getBestProductDiscount(productDiscounts, item);
+      
+      if (bestDiscount) {
+        const itemDiscount = bestDiscount.calculatedAmount * item.quantity;
+        totalDiscount += itemDiscount;
+        
+        appliedDiscounts.push({
+          productId: item.productId,
+          discount: bestDiscount,
+          amount: itemDiscount,
+          type: bestDiscount.discountType
+        });
+      }
+    }
+  }
+  
+  const finalTotal = Math.max(0, subtotal - totalDiscount);
+  
+  return {
+    subtotal: parseFloat(subtotal.toFixed(2)),
+    totalDiscount: parseFloat(totalDiscount.toFixed(2)),
+    finalTotal: parseFloat(finalTotal.toFixed(2)),
+    appliedDiscounts,
+    errors: errors.length > 0 ? errors : null,
+    discountCode: discountCode
+  };
+}
+
+// Helper to get best product discount
+getBestProductDiscount(discounts, cartItem) {
+  const price = cartItem.product.offerPrice || cartItem.product.normalPrice;
+  let bestDiscount = null;
+  let maxDiscountAmount = 0;
+  
+  for (const discount of discounts) {
+    // Check quantity requirements
+    if (discount.minQuantity && cartItem.quantity < discount.minQuantity) {
+      continue;
+    }
+    
+    let discountAmount = 0;
+    
+    if (discount.discountType === 'PERCENTAGE') {
+      discountAmount = (price * discount.discountValue) / 100;
+      if (discount.maxDiscount && discountAmount > discount.maxDiscount) {
+        discountAmount = discount.maxDiscount;
+      }
+    } else if (discount.discountType === 'FIXED_AMOUNT') {
+      discountAmount = Math.min(discount.discountValue, price);
+    }
+    
+    if (discountAmount > maxDiscountAmount) {
+      maxDiscountAmount = discountAmount;
+      bestDiscount = {
+        ...discount,
+        calculatedAmount: discountAmount,
+        finalPrice: Math.max(0, price - discountAmount)
+      };
+    }
+  }
+  
+  return bestDiscount;
+}
+
+async validateDiscount(code, userId, orderAmount = 0) {
+  try {
+    // Convert orderAmount to number
+    const orderAmt = parseFloat(orderAmount) || 0;
+    
+    // First try to find by name (code)
+    let discount = await prisma.discount.findFirst({
+      where: {
+        name: code,
+        isActive: true
+      },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        category: {
+          select: {
+            id: true,
+            name: true
+          }
+        },
+        subcategory: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+
+    // If not found by name, try by ID
+    if (!discount) {
+      discount = await prisma.discount.findUnique({
+        where: { 
+          id: code 
+        },
+        include: {
+          product: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          category: {
+            select: {
+              id: true,
+              name: true
+            }
+          },
+          subcategory: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
+      });
+    }
+    
+    if (!discount) {
+      return {
+        isValid: false,
+        message: 'Invalid discount code'
+      };
+    }
+    
+    // Check if discount is active
+    if (!discount.isActive) {
+      return {
+        isValid: false,
+        message: 'Discount is not active'
+      };
+    }
+    
+    const now = new Date();
+    if (now < discount.validFrom) {
+      return {
+        isValid: false,
+        message: 'Discount not yet valid'
+      };
+    }
+    
+    if (now > discount.validUntil) {
+      return {
+        isValid: false,
+        message: 'Discount has expired'
+      };
+    }
+    
+    // Check usage limit
+    if (discount.usageLimit && discount.usedCount >= discount.usageLimit) {
+      return {
+        isValid: false,
+        message: 'Discount usage limit reached'
+      };
+    }
+    
+    // Check per user limit
+    if (discount.perUserLimit > 0 && userId) {
+      const userUsageCount = await prisma.discountUsage.count({
+        where: {
+          discountId: discount.id,
+          userId
+        }
+      });
+      
+      if (userUsageCount >= discount.perUserLimit) {
+        return {
+          isValid: false,
+          message: 'You have reached the usage limit for this discount'
+        };
+      }
+    }
+    
+    // Check minimum order amount
+    const minOrderAmount = discount.minOrderAmount || 0;
+    if (orderAmt < minOrderAmount) {
+      return {
+        isValid: false,
+        message: `Minimum order amount of ₹${minOrderAmount} required`
+      };
+    }
+    
+    // Calculate discount amount
+    let discountAmount = 0;
+    let maxDiscountReached = false;
+    
+    if (discount.discountType === 'PERCENTAGE') {
+      discountAmount = (orderAmt * discount.discountValue) / 100;
+      if (discount.maxDiscount && discountAmount > discount.maxDiscount) {
+        discountAmount = discount.maxDiscount;
+        maxDiscountReached = true;
+      }
+    } else {
+      discountAmount = discount.discountValue;
+    }
+    
+    return {
+      isValid: true,
+      discount: {
+        id: discount.id,
+        name: discount.name,
+        description: discount.description,
+        discountType: discount.discountType,
+        discountValue: discount.discountValue,
+        maxDiscount: discount.maxDiscount,
+        discountAmount,
+        maxDiscountReached,
+        minOrderAmount: discount.minOrderAmount || 0,
+        product: discount.product,
+        category: discount.category,
+        subcategory: discount.subcategory
+      }
+    };
+    
+  } catch (error) {
+    logger.error('Error validating discount:', error);
+    return {
+      isValid: false,
+      message: 'Error validating discount code'
+    };
+  }
+}
+
 }
 
 export default new DiscountService();

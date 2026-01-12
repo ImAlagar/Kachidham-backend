@@ -34,7 +34,8 @@ import {
   calculateQuantityPrice,
   getProductsWithQuantityOffers,
   calculateCartPrices,
-  getAllSubcategoriesWithPricing
+  getAllSubcategoriesWithPricing,
+  updateVariantCodes
 } from '../controllers/productController.js';
 import { auth, authorize } from '../middleware/auth.js';
 import multer from 'multer';
@@ -163,6 +164,13 @@ router.patch('/admin/:productId/images/:imageId/primary', auth, authorize('ADMIN
 // Product variants routes (with auth)
 router.post('/admin/:productId/variants', auth, authorize('ADMIN'), upload.array('images', 10), addProductVariant);
 router.put('/admin/:productId/variants/:variantId', auth, authorize('ADMIN'), upload.array('images', 10), updateProductVariant);
+router.put(
+  '/admin/:productId/variants/color/:color/codes', 
+  auth, 
+  authorize('ADMIN'), 
+  updateVariantCodes
+);
+
 router.delete('/admin/:productId/variants/:variantId', auth, authorize('ADMIN'), removeProductVariant);
 router.patch('/admin/:productId/variants/:variantId/stock', auth, authorize('ADMIN'), updateVariantStock);
 

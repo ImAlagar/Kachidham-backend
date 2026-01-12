@@ -795,3 +795,50 @@ export const calculateQuantityPrice = asyncHandler(async (req, res) => {
       data: subcategories
     });
   });
+
+  // Update variant codes for a specific color (Admin only)
+  export const updateVariantCodes = asyncHandler(async (req, res) => {
+    const { productId, color } = req.params;
+    const { variantCodes } = req.body;
+
+    if (!variantCodes) {
+      return res.status(400).json({
+        success: false,
+        message: 'Variant codes are required'
+      });
+    }
+
+    // Ensure variantCodes is an array
+    const codesArray = Array.isArray(variantCodes) 
+      ? variantCodes 
+      : typeof variantCodes === 'string' 
+        ? variantCodes.split(',').map(code => code.trim())
+        : [];
+
+    if (codesArray.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one variant code is required'
+      });
+    }
+
+    try {
+      const result = await productService.updateVariantCodes(
+        productId,
+        color,
+        codesArray
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Variant codes updated successfully',
+        data: result
+      });
+    } catch (error) {
+      logger.error('Error updating variant codes:', error);
+      res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+  });

@@ -645,23 +645,27 @@ class ProductService {
             normalPrice,
             offerPrice,
             wholesalePrice,
-            categoryId, // This might be undefined/null
+            categoryId,
             subcategoryId,
             productDetails = [],
             variants = []
         } = productData;
 
-        // Check if product code already exists
-        const existingProduct = await prisma.product.findUnique({
-            where: { productCode }
-        });
-        
-        if (existingProduct) {
-            throw new Error('Product code already exists');
+        // ✅ FIX: Product code is now optional
+        if (productCode && productCode.trim() !== '') {
+            const existingProduct = await prisma.product.findUnique({
+                where: { productCode }
+            });
+            
+            if (existingProduct) {
+                throw new Error('Product code already exists');
+            }
+        } else {
+            productData.productCode = `PROD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         }
         
-        // ✅ FIX: Category is optional, so only check if provided
-        if (categoryId) {
+        // ✅ Category validation
+        if (categoryId && categoryId.trim() !== '') {
             const category = await prisma.category.findUnique({
                 where: { id: categoryId }
             });
@@ -670,8 +674,7 @@ class ProductService {
                 throw new Error('Category not found');
             }
             
-            // ✅ FIX: Only check subcategory if BOTH category and subcategory are provided
-            if (subcategoryId) {
+            if (subcategoryId && subcategoryId.trim() !== '') {
                 const subcategory = await prisma.subcategory.findUnique({
                     where: { id: subcategoryId }
                 });
@@ -679,21 +682,10 @@ class ProductService {
                 if (!subcategory) {
                     throw new Error('Subcategory not found');
                 }
-                
             }
         }
-        // ✅ FIX: Allow subcategory without category (or remove this check entirely)
-        // Remove or comment out this block to allow subcategory without category
-        /*
-        else {
-            // If category is not provided, subcategory should also not be provided
-            if (subcategoryId) {
-                throw new Error('Subcategory cannot be selected without a category');
-            }
-        }
-        */
         
-        // Prepare product details data
+        // Prepare product details
         const productDetailsData = productDetails.map(detail => ({
             title: detail.title,
             description: detail.description
@@ -706,19 +698,46 @@ class ProductService {
         const flattenedVariants = [];
 
         for (const variantGroup of variants) {
-            const { color, sizes = [] } = variantGroup;
+            const { color, sizes = [], variantCodes = [] } = variantGroup; // ✅ Get variantCodes at color level
+
+            // ✅ Validate and sanitize variant codes (AT COLOR LEVEL)
+            const sanitizedVariantCodes = Array.isArray(variantCodes) 
+                ? variantCodes.filter(code => code && code.trim() !== '').map(code => code.trim())
+                : [];
+
+            // ✅ Check for duplicate variant codes (AT COLOR LEVEL)
+            if (sanitizedVariantCodes.length > 0) {
+                const existingCodes = await prisma.productVariant.findMany({
+                    where: {
+                        OR: sanitizedVariantCodes.map(code => ({
+                            variantCodes: {
+                                has: code
+                            }
+                        }))
+                    },
+                    select: { variantCodes: true }
+                });
+                
+                if (existingCodes.length > 0) {
+                    const duplicateCodes = existingCodes.flatMap(v => v.variantCodes)
+                        .filter(code => sanitizedVariantCodes.includes(code));
+                    if (duplicateCodes.length > 0) {
+                        throw new Error(`Variant codes already exist: ${duplicateCodes.join(', ')}`);
+                    }
+                }
+            }
 
             // Get images for this color
             const colorImages = variantImagesByColor[color] || [];
 
             let variantImagesData = [];
             
-            // Upload variant images if provided for this color
+            // Upload variant images if provided
             if (colorImages.length > 0) {
                 try {
                     const uploadResults = await s3UploadService.uploadMultipleImages(
                         colorImages,
-                        `products/${productCode}/variants/${color}`
+                        `products/${productData.productCode}/variants/${color}`
                     );
                     
                     variantImagesData = uploadResults.map((result, index) => ({
@@ -736,7 +755,7 @@ class ProductService {
 
             // Create individual variant for EACH size
             for (const sizeObj of sizes) {
-                const { size, stock = 0, sku: sizeSku } = sizeObj;
+                const { size, stock = 0, sku: sizeSku } = sizeObj; // ❌ NO variantCodes here
 
                 // Validate size is provided
                 if (!size || size.trim() === '') {
@@ -745,22 +764,21 @@ class ProductService {
 
                 // Create SKU with category code or generic code
                 let sku = sizeSku;
-                if (!sku) {
+                if (!sku || sku.trim() === '') {
                     if (categoryId) {
                         const category = await prisma.category.findUnique({
                             where: { id: categoryId },
                             select: { name: true }
                         });
                         const categoryCode = category ? category.name.substring(0, 3).toUpperCase() : 'GEN';
-                        sku = `${productCode}-${categoryCode}-${color}-${size}`;
+                        sku = `${productData.productCode}-${categoryCode}-${color}-${size}`;
                     } else {
-                        // ✅ FIX: Use generic SKU format when no category
-                        sku = `${productCode}-GEN-${color}-${size}`;
+                        sku = `${productData.productCode}-GEN-${color}-${size}`;
                     }
                 }
 
                 // Check if SKU already exists
-                if (sku) {
+                if (sku && sku.trim() !== '') {
                     const existingVariant = await prisma.productVariant.findUnique({
                         where: { sku }
                     });
@@ -775,7 +793,8 @@ class ProductService {
                     color,
                     size: size.trim(),
                     stock: parseInt(stock) || 0,
-                    sku,
+                    sku: sku || null,
+                    variantCodes: sanitizedVariantCodes, // ✅ Add variantCodes at variant level (shared by all sizes of same color)
                     variantImages: {
                         create: variantImagesData
                     }
@@ -788,17 +807,16 @@ class ProductService {
             throw new Error('No valid variants with sizes');
         }
 
-        // ✅ FIX: Create product data with null values for optional fields
+        // Create product data
         const productDataToCreate = {
             name,
-            productCode,
-            description,
+            productCode: productData.productCode,
+            description: description || null,
             normalPrice: parseFloat(normalPrice),
             offerPrice: offerPrice ? parseFloat(offerPrice) : null,
             wholesalePrice: wholesalePrice ? parseFloat(wholesalePrice) : null,
-            // ✅ Set to null if not provided (allows NULL in database)
-            categoryId: categoryId || null,
-            subcategoryId: subcategoryId || null,
+            categoryId: categoryId && categoryId.trim() !== '' ? categoryId : null,
+            subcategoryId: subcategoryId && subcategoryId.trim() !== '' ? subcategoryId : null,
             productDetails: {
                 create: productDetailsData
             },
@@ -832,7 +850,23 @@ class ProductService {
             }
         });
 
+        // ✅ Log variant codes if added
+        if (variants.length > 0) {
+            variants.forEach((variantGroup, index) => {
+                const { color, variantCodes = [] } = variantGroup;
+                if (variantCodes.length > 0) {
+                    logger.info(`Color "${color}" has ${variantCodes.length} variant codes: ${variantCodes.join(', ')}`);
+                }
+            });
+        }
+
         logger.info(`Product created: ${product.id} with ${flattenedVariants.length} variants`);
+        console.log('📦 Product created with variants:');
+        product.variants.forEach(variant => {
+        console.log(`  ${variant.color} - ${variant.size}:`);
+        console.log(`    Variant Codes: ${variant.variantCodes.length > 0 ? variant.variantCodes.join(', ') : 'None'}`);
+        console.log(`    SKU: ${variant.sku || 'Not set'}`);
+        });
         return product;
     }
 
@@ -948,11 +982,9 @@ class ProductService {
                 if (!subcategory) {
                     throw new Error('Subcategory not found');
                 }
-
             }
         } else {
             // ✅ FIX: If category is being cleared (set to null/empty), allow it
-            // Remove subcategory validation when category is cleared
         }
         
         // ✅ FIX: Group images using variantColors
@@ -1006,7 +1038,6 @@ class ProductService {
                 }
             });
             
-            
             // Delete existing variants and their images
             await prisma.productVariantImage.deleteMany({
                 where: {
@@ -1023,10 +1054,10 @@ class ProductService {
             const flattenedVariants = [];
             
             for (const variantGroup of variantsData) {
-                const { color, sizes = [] } = variantGroup;
+                // ✅ FIX: Get variantCodes at COLOR level
+                const { color, sizes = [], variantCodes = [] } = variantGroup;
                 const colorImages = variantImagesByColor[color] || [];
                 const existingColorImages = existingImagesByColor[color] || [];
-                
                 
                 let variantImagesData = [];
                 
@@ -1046,27 +1077,59 @@ class ProductService {
                             color: color
                         }));
                         
-                        
                     } catch (uploadError) {
                         logger.error('Failed to upload variant images during update:', uploadError);
                         throw new Error('Failed to upload variant images');
                     }
                 } else if (existingColorImages.length > 0) {
                     // ✅ FIX: Preserve existing images when no new images are uploaded
-                    
                     variantImagesData = existingColorImages.map((image, index) => ({
                         imageUrl: image.imageUrl,
                         imagePublicId: image.imagePublicId,
                         isPrimary: image.isPrimary,
                         color: color
                     }));
-                    
                 } else {
                     console.error(`⚠️ No images found for color "${color}"`);
                 }
                 
+                // ✅ FIX: Sanitize variant codes at COLOR level
+                const sanitizedVariantCodes = Array.isArray(variantCodes) 
+                    ? variantCodes.filter(code => code && code.trim() !== '').map(code => code.trim())
+                    : [];
+                
+                // ✅ FIX: Check for duplicate variant codes (excluding current product's variants)
+                if (sanitizedVariantCodes.length > 0) {
+                    const existingCodes = await prisma.productVariant.findMany({
+                        where: {
+                            AND: [
+                                {
+                                    productId: { not: productId }
+                                },
+                                {
+                                    OR: sanitizedVariantCodes.map(code => ({
+                                        variantCodes: {
+                                            has: code
+                                        }
+                                    }))
+                                }
+                            ]
+                        },
+                        select: { variantCodes: true }
+                    });
+                    
+                    if (existingCodes.length > 0) {
+                        const duplicateCodes = existingCodes.flatMap(v => v.variantCodes)
+                            .filter(code => sanitizedVariantCodes.includes(code));
+                        if (duplicateCodes.length > 0) {
+                            throw new Error(`Variant codes already exist: ${duplicateCodes.join(', ')}`);
+                        }
+                    }
+                }
+                
                 // Create individual variants for each size
                 for (const sizeObj of sizes) {
+                    // ✅ FIX: Remove variantCodes from sizeObj - use color level variantCodes
                     const { size, stock = 0, sku: sizeSku } = sizeObj;
                     
                     if (!size || size.trim() === '') {
@@ -1076,7 +1139,7 @@ class ProductService {
                     
                     // ✅ FIX: Generate SKU based on current category (or generic)
                     let sku = sizeSku;
-                    if (!sku) {
+                    if (!sku || sku.trim() === '') {
                         const currentCategoryId = updatePayload.categoryId || product.categoryId;
                         if (currentCategoryId) {
                             const category = await prisma.category.findUnique({
@@ -1090,8 +1153,8 @@ class ProductService {
                         }
                     }
                     
-                    // Check SKU uniqueness (excluding current product's variants)
-                    if (sku) {
+                    // ✅ FIX: Check SKU uniqueness (excluding current product's variants)
+                    if (sku && sku.trim() !== '') {
                         const existingVariant = await prisma.productVariant.findFirst({
                             where: { 
                                 sku,
@@ -1104,16 +1167,17 @@ class ProductService {
                         }
                     }
                     
+                    // ✅ FIX: All sizes of same color get the same variantCodes
                     flattenedVariants.push({
                         color,
                         size: size.trim(),
                         stock: parseInt(stock) || 0,
-                        sku,
+                        sku: sku || null,
+                        variantCodes: sanitizedVariantCodes, // ✅ Use COLOR level variantCodes for all sizes
                         variantImages: {
                             create: variantImagesData
                         }
                     });
-                    
                 }
             }
             
@@ -1121,7 +1185,6 @@ class ProductService {
             updatePayload.variants = {
                 create: flattenedVariants
             };
-            
         } else {
             console.error('No variants data provided, keeping existing variants');
         }
@@ -1438,6 +1501,108 @@ class ProductService {
         return updatedProduct;
     }
   
+    async updateVariantCodes(productId, color, variantCodes) {
+    // Find all variants of this color in the product
+    const variants = await prisma.productVariant.findMany({
+        where: {
+            productId: productId,
+            color: color
+        }
+    });
+    
+    if (variants.length === 0) {
+        throw new Error(`No variants found for color ${color} in product ${productId}`);
+    }
+    
+    // Sanitize variant codes
+    const sanitizedVariantCodes = Array.isArray(variantCodes) 
+        ? variantCodes.filter(code => code && code.trim() !== '').map(code => code.trim())
+        : [];
+    
+    // Check for duplicate variant codes in OTHER products
+    if (sanitizedVariantCodes.length > 0) {
+        const existingCodes = await prisma.productVariant.findMany({
+            where: {
+                AND: [
+                    {
+                        productId: { not: productId } // Exclude current product
+                    },
+                    {
+                        OR: sanitizedVariantCodes.map(code => ({
+                            variantCodes: {
+                                has: code
+                            }
+                        }))
+                    }
+                ]
+            },
+            select: { variantCodes: true, productId: true }
+        });
+        
+        if (existingCodes.length > 0) {
+            const duplicateCodes = existingCodes.flatMap(v => v.variantCodes)
+                .filter(code => sanitizedVariantCodes.includes(code));
+            if (duplicateCodes.length > 0) {
+                throw new Error(`Variant codes already exist in other products: ${duplicateCodes.join(', ')}`);
+            }
+        }
+    }
+    
+    // Update ALL variants of this color
+    const updatedVariants = await prisma.productVariant.updateMany({
+        where: {
+            productId: productId,
+            color: color
+        },
+        data: {
+            variantCodes: sanitizedVariantCodes,
+            updatedAt: new Date()
+        }
+    });
+    
+    logger.info(`Updated variant codes for color "${color}" in product ${productId}: ${sanitizedVariantCodes.join(', ')}`);
+    
+    // Return updated variants
+    const result = await prisma.productVariant.findMany({
+        where: {
+            productId: productId,
+            color: color
+        },
+        include: {
+            variantImages: {
+                orderBy: {
+                    isPrimary: 'desc'
+                }
+            }
+        }
+    });
+    
+    return {
+        success: true,
+        message: `Updated variant codes for ${updatedVariants.count} variants`,
+        color: color,
+        variantCodes: sanitizedVariantCodes,
+        variants: result
+    };
+}
+
+async updateVariantWithCodes(productId, variantId, updates) {
+    const { stock, variantCodes, color } = updates;
+    
+    let result = {};
+    
+    // Update stock if provided
+    if (stock !== undefined) {
+        result.stockUpdate = await this.updateVariantStock(productId, variantId, stock);
+    }
+    
+    // Update variant codes if provided
+    if (variantCodes !== undefined && color) {
+        result.codesUpdate = await this.updateVariantCodes(productId, color, variantCodes);
+    }
+    
+    return result;
+}
     // Remove product variant
     async removeProductVariant(productId, variantId) {
         const variant = await prisma.productVariant.findUnique({

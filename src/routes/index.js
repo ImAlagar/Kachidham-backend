@@ -44,7 +44,7 @@ router.use('/faqs', faqRoutes); // Add this line
 // ✅ ADD THIS NEW ROUTE
 router.use('/admin/subcategory-quantity-prices', subcategoryQuantityPriceRoutes);
 router.use('/design-inquiries', designInquiryRoutes); // Add this line
-router.use('/:orderId/discounts', discountRoutes);
+router.use('/discounts', discountRoutes);
 
 
 export default router;

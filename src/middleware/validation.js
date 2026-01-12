@@ -1,4 +1,4 @@
-import { body, validationResult } from 'express-validator';
+import { body, query, validationResult } from 'express-validator';
 import { findInvalidChars } from '../utils/findInvalidChars.js';
 
 
@@ -200,11 +200,10 @@ export const validateProduct = [
     .isLength({ min: 2, max: 200 })
     .withMessage('Product name must be between 2 and 200 characters'),
 
-  body('productCode')
-    .notEmpty()
-    .withMessage('Product code is required')
+body('productCode')
+    .optional({ checkFalsy: true }) // This makes it optional
     .isLength({ min: 2, max: 50 })
-    .withMessage('Product code must be between 2 and 50 characters')
+    .withMessage('Product code must be between 2 and 50 characters if provided')
     .matches(/^[A-Za-z0-9\-_]+$/)
     .withMessage('Product code can only contain letters, numbers, hyphens, and underscores'),
 
@@ -1423,3 +1422,221 @@ export const validateDesignInquiryUpdate = [
     next();
   }
 ];
+
+
+
+export const validateDiscount = validate([
+  body('name')
+    .notEmpty().withMessage('Discount name is required')
+    .isLength({ min: 3, max: 50 }).withMessage('Discount name must be between 3 and 50 characters')
+    .matches(/^[A-Z0-9_]+$/).withMessage('Discount code must contain only uppercase letters, numbers, and underscores'),
+  
+  body('description')
+    .optional()
+    .isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
+  
+  body('discountType')
+    .notEmpty().withMessage('Discount type is required')
+    .isIn(['PERCENTAGE', 'FIXED_AMOUNT', 'BUY_X_GET_Y', 'FREE_SHIPPING'])
+    .withMessage('Invalid discount type'),
+  
+  body('discountValue')
+    .notEmpty().withMessage('Discount value is required')
+    .isFloat({ min: 0.01 }).withMessage('Discount value must be greater than 0')
+    .custom((value, { req }) => {
+      if (req.body.discountType === 'PERCENTAGE' && value > 100) {
+        throw new Error('Percentage discount cannot exceed 100%');
+      }
+      return true;
+    }),
+  
+  body('scopeType')
+    .optional()
+    .isIn(['SITEWIDE', 'PRODUCT', 'CATEGORY', 'SUBCATEGORY'])
+    .withMessage('Invalid scope type'),
+  
+  body('productId')
+    .optional()
+    .isString().withMessage('Product ID must be a string')
+    .custom((value, { req }) => {
+      if (req.body.scopeType === 'PRODUCT' && !value) {
+        throw new Error('Product ID is required for product-specific discount');
+      }
+      return true;
+    }),
+  
+  body('categoryId')
+    .optional()
+    .isString().withMessage('Category ID must be a string')
+    .custom((value, { req }) => {
+      if (req.body.scopeType === 'CATEGORY' && !value) {
+        throw new Error('Category ID is required for category discount');
+      }
+      return true;
+    }),
+  
+  body('subcategoryId')
+    .optional()
+    .isString().withMessage('Subcategory ID must be a string')
+    .custom((value, { req }) => {
+      if (req.body.scopeType === 'SUBCATEGORY' && !value) {
+        throw new Error('Subcategory ID is required for subcategory discount');
+      }
+      return true;
+    }),
+  
+  body('userType')
+    .optional()
+    .isIn(['ALL', 'REGULAR', 'WHOLESALE', 'NEW_USER', 'LOYALTY'])
+    .withMessage('Invalid user type'),
+  
+  body('minOrderAmount')
+    .optional()
+    .isFloat({ min: 0 }).withMessage('Minimum order amount must be 0 or greater'),
+  
+  body('maxDiscount')
+    .optional()
+    .isFloat({ min: 0 }).withMessage('Maximum discount must be 0 or greater')
+    .custom((value, { req }) => {
+      if (req.body.discountType === 'PERCENTAGE' && value && value <= 0) {
+        throw new Error('Maximum discount must be greater than 0 for percentage discounts');
+      }
+      return true;
+    }),
+  
+  body('usageLimit')
+    .optional()
+    .isInt({ min: 1 }).withMessage('Usage limit must be at least 1'),
+  
+  body('perUserLimit')
+    .optional()
+    .default(1)
+    .isInt({ min: 1 }).withMessage('Per user limit must be at least 1'),
+  
+  body('validFrom')
+    .notEmpty().withMessage('Valid from date is required')
+    .isISO8601().withMessage('Valid from must be a valid date')
+    .custom((value, { req }) => {
+      const validFrom = new Date(value);
+      const now = new Date();
+      if (validFrom < now.setHours(0, 0, 0, 0)) {
+        throw new Error('Valid from date cannot be in the past');
+      }
+      return true;
+    }),
+  
+  body('validUntil')
+    .notEmpty().withMessage('Valid until date is required')
+    .isISO8601().withMessage('Valid until must be a valid date')
+    .custom((value, { req }) => {
+      const validFrom = new Date(req.body.validFrom);
+      const validUntil = new Date(value);
+      if (validUntil <= validFrom) {
+        throw new Error('Valid until date must be after valid from date');
+      }
+      return true;
+    }),
+  
+  body('isActive')
+    .optional()
+    .isBoolean().withMessage('isActive must be a boolean'),
+]);
+
+export const validateDiscountUpdate = validate([
+  body('name')
+    .optional()
+    .isLength({ min: 3, max: 50 }).withMessage('Discount name must be between 3 and 50 characters')
+    .matches(/^[A-Z0-9_]+$/).withMessage('Discount code must contain only uppercase letters, numbers, and underscores'),
+  
+  body('description')
+    .optional()
+    .isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
+  
+  body('discountType')
+    .optional()
+    .isIn(['PERCENTAGE', 'FIXED_AMOUNT', 'BUY_X_GET_Y', 'FREE_SHIPPING'])
+    .withMessage('Invalid discount type'),
+  
+  body('discountValue')
+    .optional()
+    .isFloat({ min: 0.01 }).withMessage('Discount value must be greater than 0')
+    .custom((value, { req }) => {
+      if (req.body.discountType === 'PERCENTAGE' && value > 100) {
+        throw new Error('Percentage discount cannot exceed 100%');
+      }
+      return true;
+    }),
+  
+  body('userType')
+    .optional()
+    .isIn(['ALL', 'REGULAR', 'WHOLESALE', 'NEW_USER', 'LOYALTY'])
+    .withMessage('Invalid user type'),
+  
+  body('minOrderAmount')
+    .optional()
+    .isFloat({ min: 0 }).withMessage('Minimum order amount must be 0 or greater'),
+  
+  body('maxDiscount')
+    .optional()
+    .isFloat({ min: 0 }).withMessage('Maximum discount must be 0 or greater'),
+  
+  body('usageLimit')
+    .optional()
+    .isInt({ min: 1 }).withMessage('Usage limit must be at least 1'),
+  
+  body('perUserLimit')
+    .optional()
+    .isInt({ min: 1 }).withMessage('Per user limit must be at least 1'),
+  
+  body('validFrom')
+    .optional()
+    .isISO8601().withMessage('Valid from must be a valid date'),
+  
+  body('validUntil')
+    .optional()
+    .isISO8601().withMessage('Valid until must be a valid date')
+    .custom((value, { req }) => {
+      if (req.body.validFrom && value) {
+        const validFrom = new Date(req.body.validFrom);
+        const validUntil = new Date(value);
+        if (validUntil <= validFrom) {
+          throw new Error('Valid until date must be after valid from date');
+        }
+      }
+      return true;
+    }),
+  
+  body('isActive')
+    .optional()
+    .isBoolean().withMessage('isActive must be a boolean'),
+]);
+
+export const validateDiscountStatus = validate([
+  body('isActive')
+    .notEmpty().withMessage('isActive is required')
+    .isBoolean().withMessage('isActive must be a boolean')
+]);
+
+export const validateDiscountQuery = validate([
+  query('page')
+    .optional()
+    .isInt({ min: 1 }).withMessage('Page must be a positive integer'),
+  
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100'),
+  
+  query('discountType')
+    .optional()
+    .isIn(['PERCENTAGE', 'FIXED_AMOUNT', 'BUY_X_GET_Y', 'FREE_SHIPPING', 'ALL'])
+    .withMessage('Invalid discount type filter'),
+  
+  query('status')
+    .optional()
+    .isIn(['ACTIVE', 'INACTIVE', 'ALL'])
+    .withMessage('Invalid status filter'),
+  
+  query('search')
+    .optional()
+    .isLength({ max: 100 }).withMessage('Search query cannot exceed 100 characters'),
+]);
