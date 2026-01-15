@@ -325,9 +325,38 @@ async sendAdminPasswordChangedConfirmation(adminData) {
     }
   }
 
-  async sendOrderStatusUpdate(orderData, oldStatus, newStatus) {
+  async sendOrderStatusUpdate(orderData, oldStatus, newStatus, adminNotes = null) {
     try {
-      const template = emailTemplates.orderStatusUpdate(orderData, oldStatus, newStatus);
+
+      if (!emailTemplates) {
+        console.error('❌ emailTemplates not defined');
+        return null;
+      }
+      
+      if (!emailTemplates.orderStatusUpdate) {
+        console.error('❌ emailTemplates.orderStatusUpdate not defined');
+        return null;
+      }
+      
+      // ✅ Call template function with all parameters
+      const template = emailTemplates.orderStatusUpdate(
+        orderData, 
+        oldStatus, 
+        newStatus,
+        adminNotes
+      );
+      
+
+      
+      if (!emailService) {
+        console.error('❌ emailService not defined');
+        return null;
+      }
+      
+      if (!emailService.sendEmail) {
+        console.error('❌ emailService.sendEmail not defined');
+        return null;
+      }
       
       const result = await emailService.sendEmail({
         to: orderData.email,
@@ -340,8 +369,10 @@ async sendAdminPasswordChangedConfirmation(adminData) {
       return result;
       
     } catch (error) {
-      console.error('❌ Order status update email failed:', error.message);
+      console.error('❌ Order status update email failed:', error);
+      console.error('❌ Error stack:', error.stack);
       // Don't throw error - continue even if email fails
+      return null;
     }
   }
 

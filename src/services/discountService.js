@@ -1397,6 +1397,119 @@ async validateDiscount(code, userId, orderAmount = 0) {
   }
 }
 
+
+async calculateFinalAmountWithDiscounts(cartData, userId, discountCode = null) {
+  const { cartItems, shippingState } = cartData;
+  
+  // Calculate subtotal from cart items
+  let subtotal = 0;
+  const itemsWithDetails = [];
+  
+  for (const item of cartItems) {
+    const product = await prisma.product.findUnique({
+      where: { id: item.productId },
+      select: {
+        id: true,
+        name: true,
+        normalPrice: true,
+        offerPrice: true,
+        status: true
+      }
+    });
+    
+    if (!product) {
+      throw new Error(`Product ${item.productId} not found`);
+    }
+    
+    const price = product.offerPrice || product.normalPrice;
+    const itemTotal = price * item.quantity;
+    subtotal += itemTotal;
+    
+    itemsWithDetails.push({
+      product,
+      price,
+      quantity: item.quantity,
+      itemTotal
+    });
+  }
+  
+  // Apply discount code if provided
+  let discountAmount = 0;
+  let appliedDiscounts = [];
+  let errors = [];
+  
+  if (discountCode) {
+    try {
+      const validation = await this.validateDiscount(discountCode, userId, subtotal);
+      
+      if (validation.isValid) {
+        discountAmount = validation.discount.discountAmount;
+        appliedDiscounts.push({
+          discount: validation.discount,
+          amount: discountAmount,
+          type: 'CODE'
+        });
+      } else {
+        errors.push(validation.message);
+      }
+    } catch (error) {
+      errors.push(error.message);
+    }
+  }
+  
+  // Apply product-specific discounts
+  let productDiscounts = 0;
+  for (const item of itemsWithDetails) {
+    const productDiscount = await this.calculateProductDiscount(item.product.id, userId);
+    
+    if (productDiscount.hasDiscount) {
+      const itemDiscount = productDiscount.discountAmount * item.quantity;
+      productDiscounts += itemDiscount;
+      
+      appliedDiscounts.push({
+        productId: item.product.id,
+        discount: productDiscount.bestDiscount,
+        amount: itemDiscount,
+        type: productDiscount.bestDiscount.discountType
+      });
+    }
+  }
+  
+  const totalDiscount = discountAmount + productDiscounts;
+  
+  // Calculate shipping based on state
+  const shippingCost = this.calculateShippingCost(shippingState);
+  
+  // Calculate final total (SUBTOTAL - DISCOUNTS + SHIPPING)
+  const finalTotal = Math.max(0, (subtotal - totalDiscount + shippingCost));
+  
+  return {
+    success: true,
+    data: {
+      subtotal: parseFloat(subtotal.toFixed(2)),
+      totalDiscount: parseFloat(totalDiscount.toFixed(2)),
+      shipping: parseFloat(shippingCost.toFixed(2)),
+      finalTotal: parseFloat(finalTotal.toFixed(2)),
+      appliedDiscounts,
+      errors: errors.length > 0 ? errors : null,
+      discountCode
+    }
+  };
+}
+
+// Calculate shipping cost
+calculateShippingCost(state) {
+  const shippingRates = {
+    'Tamil Nadu': 80,
+    'Kerala': 100,
+    'Karnataka': 100,
+    'Andhra Pradesh': 100,
+    'Telangana': 100,
+    'Other': 200
+  };
+  
+  return shippingRates[state] || shippingRates['Other'];
+}
 }
 
 export default new DiscountService();

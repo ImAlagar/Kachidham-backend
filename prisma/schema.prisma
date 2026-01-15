@@ -344,6 +344,7 @@ model Order {
   subtotal         Float
   discount         Float         @default(0)
   shippingCost     Float         @default(0)
+  adminNotes       String?        // Add this field
   paymentStatus    PaymentStatus @default(PENDING)
   paymentMethod    String
   
@@ -443,6 +444,7 @@ model TrackingHistory {
   orderId     String
   status      String  
   location    String? 
+  adminNotes  String?  // ✅ Add this field
   description String
   createdAt   DateTime @default(now())
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)

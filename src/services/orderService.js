@@ -265,94 +265,196 @@ async calculateOrderTotals(orderItems, discountCode = null, shippingState = null
 }
 
 
-  async initiateRazorpayPayment(orderData) {
+// services/orderService.js
+async initiateRazorpayPayment(orderData) {
     const {
-      userId,
-      name,
-      email,
-      phone,
-      address,
-      city,
-      state,
-      pincode,
-      orderItems,
-      discountCode, // Changed from couponCode to discountCode
-      customImages = []
+        userId,
+        name,
+        email,
+        phone,
+        address,
+        city,
+        state,
+        pincode,
+        orderItems,
+        discountCode,
+        customImages = [],
+        // ✅ Get both values from frontend
+        totalAmountRupees,
+        totalAmountPaise
     } = orderData;
 
     // Validate required fields
     if (!name || !email || !phone || !address || !city || !state || !pincode) {
-      throw new Error('All shipping information fields are required');
+        throw new Error('All shipping information fields are required');
     }
 
-    // Calculate totals with quantity pricing AND SHIPPING (pass state)
-    const totals = await this.calculateOrderTotals(orderItems, discountCode, state, userId);
-
-    if (totals.discountError) {
-      throw new Error(totals.discountError);
+    // ✅ Use the calculated amount from frontend OR recalculate
+    let finalAmountRupees = 0;
+    let finalAmountPaise = 0;
+    
+    if (totalAmountRupees && totalAmountPaise) {
+        // Use frontend calculated amount
+        finalAmountRupees = parseFloat(totalAmountRupees);
+        finalAmountPaise = parseInt(totalAmountPaise);
+    } else {
+        // Recalculate if not provided
+        // ... your calculation logic ...
+        finalAmountRupees = parseFloat(finalTotal.toFixed(2));
+        finalAmountPaise = Math.round(finalAmountRupees * 100);
     }
 
-    // Create Razorpay order with total amount (includes shipping)
+
+
+    // ✅ Create Razorpay order with PAISE amount
     const razorpayOrder = await razorpayService.createOrder(
-      totals.totalAmount,
-      'INR'
+        totalAmountPaise, // Send 26000 (already in paise)
+        'INR'
     );
 
     // Store temporary order data
     const tempOrderData = {
-      userId,
-      name,
-      email,
-      phone,
-      address,
-      city,
-      state,
-      pincode,
-      orderItems,
-      discountCode,
-      appliedDiscounts: totals.appliedDiscounts,
-      customImages,
-      totals,
-      razorpayOrderId: razorpayOrder.id
+        userId,
+        name,
+        email,
+        phone,
+        address,
+        city,
+        state,
+        pincode,
+        orderItems,
+        discountCode,
+        appliedDiscounts: orderData.appliedDiscounts || [],
+        customImages,
+        totals: {
+            subtotal: orderData.subtotal || 0,
+            discountAmount: orderData.discountAmount || 0,
+            shippingCost: orderData.shipping || 0,
+            totalAmount: finalAmountRupees, // Store rupee amount
+            totalAmountPaise: finalAmountPaise // Store paise amount
+        },
+        razorpayOrderId: razorpayOrder.id
     };
 
-    logger.info(`Razorpay order initiated. Subtotal: ₹${totals.subtotal}, Discount: ₹${totals.discountAmount}, Shipping: ₹${totals.shippingCost}, Total: ₹${totals.totalAmount}`);
+    logger.info(`💳 Razorpay order initiated:`, {
+        'Subtotal': `₹${orderData.subtotal || 0}`,
+        'Discount': `₹${orderData.discountAmount || 0}`,
+        'Shipping': `₹${orderData.shipping || 0}`,
+        'Total (₹)': `₹${finalAmountRupees.toFixed(2)}`,
+        'Amount (paise)': finalAmountPaise,
+        'Order ID': razorpayOrder.id
+    });
 
     return {
-      razorpayOrder,
-      tempOrderData: {
-        ...tempOrderData,
-        orderNumber: this.generateOrderNumber()
-      }
+        razorpayOrder,
+        tempOrderData: {
+            ...tempOrderData,
+            orderNumber: this.generateOrderNumber()
+        }
     };
+}
+
+async verifyAndCreateOrder(paymentData) {
+  const {
+    razorpay_order_id,
+    razorpay_payment_id,
+    razorpay_signature,
+    orderData
+  } = paymentData;
+
+
+
+  // Verify payment signature
+  const isValid = razorpayService.verifyPayment(
+    razorpay_order_id,
+    razorpay_payment_id,
+    razorpay_signature
+  );
+
+  if (!isValid) {
+    console.error('❌ Payment signature verification failed');
+    throw new Error('Payment verification failed');
   }
 
-  async verifyAndCreateOrder(paymentData) {
-    const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      orderData
-    } = paymentData;
 
-    // Verify payment signature
-    const isValid = razorpayService.verifyPayment(
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature
-    );
+  try {
+    // Calculate totals
+    const cartData = {
+      cartItems: orderData.orderItems.map(item => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        price: 0
+      })),
+      shippingState: orderData.state
+    };
 
-    if (!isValid) {
-      throw new Error('Payment verification failed');
+    
+    let discountResult;
+    try {
+      discountResult = await discountService.calculateFinalAmountWithDiscounts(
+        cartData,
+        orderData.userId,
+        orderData.discountCode
+      );
+    } catch (discountError) {
+      console.error('❌ Discount calculation error:', discountError);
+      // Continue without discount if calculation fails
+      discountResult = {
+        success: true,
+        data: {
+          subtotal: orderData.subtotal || 0,
+          totalDiscount: orderData.discountAmount || 0,
+          shipping: orderData.shipping || 0,
+          finalTotal: orderData.totalAmount || 0,
+          appliedDiscounts: orderData.appliedDiscounts || []
+        }
+      };
     }
 
-    // Calculate totals again to ensure consistency
-    const totals = await this.calculateOrderTotals(orderData.orderItems, orderData.discountCode, orderData.state, orderData.userId);
-    
+    if (!discountResult.success) {
+      console.warn('⚠️ Discount validation failed, proceeding without discounts');
+    }
+
+    const { subtotal, totalDiscount, shipping, finalTotal, appliedDiscounts } = discountResult.data;
+
+
+
+
+    // Prepare order items data
+    const orderItemsData = await Promise.all(
+      orderData.orderItems.map(async (item) => {
+        try {
+          const product = await prisma.product.findUnique({
+            where: { id: item.productId },
+            select: { normalPrice: true, offerPrice: true }
+          });
+          
+          if (!product) {
+            throw new Error(`Product ${item.productId} not found`);
+          }
+          
+          const price = product.offerPrice || product.normalPrice;
+
+          
+          return {
+            productId: item.productId,
+            productVariantId: item.productVariantId || null,
+            quantity: item.quantity,
+            price: price
+            // ❌ NO unitPrice field here
+          };
+        } catch (error) {
+          console.error(`❌ Error processing order item ${item.productId}:`, error);
+          throw error;
+        }
+      })
+    );
+
+
     // Prepare custom images data
     const customImages = orderData.customImages || [];
 
-    // Create the order
+    // Create order data
     const orderCreateData = {
       orderNumber: this.generateOrderNumber(),
       user: {
@@ -368,38 +470,31 @@ async calculateOrderTotals(orderItems, discountCode = null, shippingState = null
       state: orderData.state,
       pincode: orderData.pincode,
       status: 'CONFIRMED',
-      totalAmount: totals.totalAmount,
-      subtotal: totals.subtotal,
-      discount: totals.discountAmount,
-      shippingCost: totals.shippingCost,
+      totalAmount: finalTotal,
+      subtotal: subtotal,
+      discount: totalDiscount,
+      shippingCost: shipping,
       paymentStatus: 'PAID',
       paymentMethod: 'ONLINE',
       razorpayOrderId: razorpay_order_id,
       razorpayPaymentId: razorpay_payment_id,
       razorpaySignature: razorpay_signature,
-      // Create custom image records if any
-      ...(customImages.length > 0 && {
-        customImages: {
-          create: customImages.map(img => ({
-            imageUrl: img.url,
-            imageKey: img.key,
-            filename: img.filename || `custom-image-${Date.now()}.jpg`
-          }))
-        }
-      }),
       orderItems: {
-        create: await Promise.all(
-          totals.items.map(async (item) => {
-            return {
-              productId: item.productId,
-              productVariantId: item.productVariantId || null,
-              quantity: item.quantity,
-              price: item.basePrice,
-            };
-          })
-        )
+        create: orderItemsData
       }
     };
+
+    // Add custom images if any
+    if (customImages.length > 0) {
+      orderCreateData.customImages = {
+        create: customImages.map(img => ({
+          imageUrl: img.url,
+          imageKey: img.key,
+          filename: img.filename || `custom-image-${Date.now()}.jpg`
+        }))
+      };
+    }
+
 
     // Create the actual order in database
     const order = await prisma.order.create({
@@ -440,46 +535,49 @@ async calculateOrderTotals(orderItems, discountCode = null, shippingState = null
       }
     });
 
+
+
     // Update stock for variants
+   
     for (const item of orderData.orderItems) {
       if (item.productVariantId) {
-        await prisma.productVariant.update({
-          where: { id: item.productVariantId },
-          data: {
-            stock: { decrement: item.quantity }
-          }
-        });
+        try {
+          await prisma.productVariant.update({
+            where: { id: item.productVariantId },
+            data: {
+              stock: { decrement: item.quantity }
+            }
+          });
+        } catch (stockError) {
+          console.error(`❌ Failed to update stock for variant ${item.productVariantId}:`, stockError);
+        }
       }
     }
 
-    // FIXED: Record discount usage if discount was applied
-    if (totals.discountAmount > 0 && orderData.discountCode) {
-      try {
-        // Record the main discount
-        await discountService.recordDiscountUsage(
-          orderData.discountCode,
-          orderData.userId,
-          order.id,
-          totals.discountAmount
-        );
-      } catch (error) {
-        logger.error(`Failed to record discount usage for ${orderData.discountCode}:`, error.message);
-      }
-    }
-
-    // Also record any product-specific discounts
-    if (totals.appliedDiscounts && totals.appliedDiscounts.length > 0) {
-      for (const discount of totals.appliedDiscounts) {
-        if (discount.code && discount.code !== orderData.discountCode) {
+    // Record discount usage
+    if (appliedDiscounts && appliedDiscounts.length > 0) {
+      for (const discount of appliedDiscounts) {
+        if (discount.discount?.id) {
           try {
-            await discountService.recordDiscountUsage(
-              discount.code,
-              orderData.userId,
-              order.id,
-              discount.amount || 0
-            );
-          } catch (error) {
-            logger.error(`Failed to record product discount usage: ${error.message}`);
+            await prisma.discountUsage.create({
+              data: {
+                discountId: discount.discount.id,
+                userId: orderData.userId,
+                orderId: order.id,
+                discountAmount: discount.amount || 0
+              }
+            });
+            
+            await prisma.discount.update({
+              where: { id: discount.discount.id },
+              data: {
+                usedCount: { increment: 1 },
+                totalDiscounts: { increment: discount.amount || 0 }
+              }
+            });
+            
+          } catch (discountError) {
+            console.error(`❌ Failed to record discount: ${discountError.message}`);
           }
         }
       }
@@ -490,7 +588,7 @@ async calculateOrderTotals(orderItems, discountCode = null, shippingState = null
       data: {
         orderId: order.id,
         status: 'CONFIRMED',
-        description: `Order confirmed and payment received. Discount: ₹${totals.discountAmount}`,
+        description: `Order confirmed. Discount applied: ₹${totalDiscount}`,
         location: `${order.city}, ${order.state}`
       }
     });
@@ -499,19 +597,40 @@ async calculateOrderTotals(orderItems, discountCode = null, shippingState = null
     try {
       await emailNotificationService.sendOrderNotifications(order);
     } catch (emailError) {
-      logger.error('Failed to send order confirmation email:', emailError);
+      console.error('❌ Failed to send order confirmation email:', emailError);
     }
 
-    logger.info(`Order created successfully. Discount: ₹${totals.discountAmount}`);
+    logger.info(`✅ Order ${order.orderNumber} created successfully`, {
+      OrderNumber: order.orderNumber,
+      Total: `₹${finalTotal}`,
+      Discount: `₹${totalDiscount}`,
+      Subtotal: `₹${subtotal}`,
+      Shipping: `₹${shipping}`,
+      User: orderData.email
+    });
+
     
     return {
-      ...order,
-      quantitySavings: totals.quantitySavings,
-      discountAmount: totals.discountAmount,
-      appliedDiscounts: totals.appliedDiscounts
+      success: true,
+      data: {
+        ...order,
+        discountAmount: totalDiscount,
+        appliedDiscounts: appliedDiscounts
+      }
     };
+    
+  } catch (error) {
+    console.error('❌ Error in verifyAndCreateOrder:', error);
+    logger.error('Order creation failed:', {
+      error: error.message,
+      stack: error.stack,
+      orderId: razorpay_order_id,
+      paymentId: razorpay_payment_id
+    });
+    
+    throw new Error(`Order creation failed: ${error.message}`);
   }
-
+}
 
   async createCODOrder(orderData) {
     const {
@@ -871,95 +990,116 @@ async calculateOrderTotals(orderItems, discountCode = null, shippingState = null
     return order;
   }
 
-  async updateOrderStatus(orderId, statusData) {
-    const { status, adminNotes } = statusData;
-    
-    const order = await prisma.order.findUnique({
-      where: { id: orderId }
-    });
-    
-    if (!order) {
-      throw new Error('Order not found');
-    }
-    
-    const validStatuses = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED'];
-    if (!validStatuses.includes(status)) {
-      throw new Error('Invalid status');
-    }
-    
-    const oldStatus = order.status;
-    
-    const updateData = {
-      status,
-      ...(adminNotes && { adminNotes })
-    };
+async updateOrderStatus(orderId, statusData) {
+  const { status, adminNotes } = statusData;
+  
 
-    // Set timestamps for specific status changes
-    if (status === 'SHIPPED' && order.status !== 'SHIPPED') {
-      updateData.shippedAt = new Date();
-    }
-    
-    if (status === 'DELIVERED' && order.status !== 'DELIVERED') {
-      updateData.deliveredAt = new Date();
-    }
-    
-    const updatedOrder = await prisma.order.update({
-      where: { id: orderId },
-      data: updateData,
-      include: {
-        orderItems: {
-          include: {
-            product: {
-              include: {
-                images: {
-                  take: 1,
-                  select: {
-                    imageUrl: true
-                  }
+  
+  const order = await prisma.order.findUnique({
+    where: { id: orderId }
+  });
+  
+  if (!order) {
+    throw new Error('Order not found');
+  }
+  
+  const validStatuses = ['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REFUNDED'];
+  if (!validStatuses.includes(status)) {
+    throw new Error('Invalid status');
+  }
+  
+  const oldStatus = order.status;
+  
+  const updateData = {
+    status,
+    ...(adminNotes && { adminNotes })
+  };
+
+  
+  // Set timestamps for specific status changes
+  if (status === 'SHIPPED' && order.status !== 'SHIPPED') {
+    updateData.shippedAt = new Date();
+  }
+  
+  if (status === 'DELIVERED' && order.status !== 'DELIVERED') {
+    updateData.deliveredAt = new Date();
+  }
+  
+  const updatedOrder = await prisma.order.update({
+    where: { id: orderId },
+    data: updateData,
+    include: {
+      orderItems: {
+        include: {
+          product: {
+            include: {
+              images: {
+                take: 1,
+                select: {
+                  imageUrl: true
                 }
               }
-            },
-            productVariant: {
-              select: {
-                id: true,
-                color: true,
-                size: true
-              }
+            }
+          },
+          productVariant: {
+            select: {
+              id: true,
+              color: true,
+              size: true
             }
           }
-        },
-        customImages: true, // Include custom images
-        user: {
-          select: {
-            id: true,
-            name: true,
-            email: true
-          }
         }
-      }
-    });
-    
-
-    if (status !== order.status) {
-      await prisma.trackingHistory.create({
-        data: {
-          orderId,
-          status,
-          description: this.getStatusDescription(status),
-          location: `${order.city}, ${order.state}`
+      },
+      customImages: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          email: true
         }
-      });
-
-      try {
-        await emailNotificationService.sendOrderStatusUpdate(updatedOrder, oldStatus, status);
-      } catch (emailError) {
-        logger.error('Failed to send status update email:', emailError);
       }
     }
-    
-    logger.info(`Order status updated: ${orderId} -> ${status}`);
-    return updatedOrder;
+  });
+
+  
+  if (status !== order.status) {
+    // ✅ Fix: Only include adminNotes if it exists
+    const trackingData = {
+      orderId,
+      status,
+      description: this.getStatusDescription(status),
+      location: `${order.city}, ${order.state}`,
+      ...(adminNotes && { adminNotes }) // ✅ Only add adminNotes if provided
+    };
+
+    await prisma.trackingHistory.create({
+      data: trackingData
+    });
+
+    try {
+      
+      // ✅ Check if email service exists and is working
+      if (!emailNotificationService || !emailNotificationService.sendOrderStatusUpdate) {
+        console.error('❌ Email notification service not available');
+        throw new Error('Email service not available');
+      }
+      
+      const emailResult = await emailNotificationService.sendOrderStatusUpdate(
+        updatedOrder, 
+        oldStatus, 
+        status,
+        adminNotes || null
+      );
+      
+      
+    } catch (emailError) {
+      logger.error('Failed to send status update email:', emailError);
+    }
   }
+  
+  logger.info(`Order status updated: ${orderId} -> ${status}`);
+  return updatedOrder;
+}
 
   async updateTrackingInfo(orderId, trackingData) {
     const { trackingNumber, carrier, trackingUrl, estimatedDelivery } = trackingData;

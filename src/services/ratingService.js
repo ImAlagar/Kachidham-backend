@@ -104,16 +104,6 @@ async getAllRatings({ page, limit, isApproved, productId, userId }) {
 
   async createRating(ratingData, userId, files = []) {
     const { productId, rating, title, review } = ratingData;
-
-    console.log('DEBUG - Creating rating with data:', { productId, rating, title, review });
-    console.log('DEBUG - Number of files received:', files.length);
-    console.log('DEBUG - Files details:', files.map(f => ({
-      originalname: f.originalname,
-      mimetype: f.mimetype,
-      size: f.size,
-      buffer: f.buffer ? 'Buffer exists' : 'No buffer'
-    })));
-
     // Validate required fields
     if (!productId || !rating) {
       throw new Error("Product ID and rating are required");
@@ -177,16 +167,13 @@ async getAllRatings({ page, limit, isApproved, productId, userId }) {
         },
       });
 
-      console.log('DEBUG - Rating record created:', ratingRecord.id);
 
       // Upload and create rating images if provided
       let ratingImages = [];
       if (files && files.length > 0) {
-        console.log('DEBUG - Starting to process', files.length, 'images');
         
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          console.log(`DEBUG - Processing image ${i + 1}:`, file.originalname);
           
           try {
             // Test if file buffer exists
@@ -202,7 +189,6 @@ async getAllRatings({ page, limit, isApproved, productId, userId }) {
               i + 1
             );
 
-            console.log(`DEBUG - Image ${i + 1} uploaded to S3:`, uploadResult.url);
 
             // Create rating image record
             const ratingImage = await tx.ratingImage.create({
@@ -214,7 +200,6 @@ async getAllRatings({ page, limit, isApproved, productId, userId }) {
               },
             });
 
-            console.log(`DEBUG - RatingImage record created:`, ratingImage.id);
             ratingImages.push(ratingImage);
           } catch (uploadError) {
             console.error(`DEBUG - Failed to upload image ${i + 1}:`, uploadError.message);
@@ -223,7 +208,7 @@ async getAllRatings({ page, limit, isApproved, productId, userId }) {
           }
         }
       } else {
-        console.log('DEBUG - No files to process');
+        console.error('DEBUG - No files to process');
       }
 
       // Fetch the complete rating with images
@@ -252,7 +237,6 @@ async getAllRatings({ page, limit, isApproved, productId, userId }) {
         },
       });
 
-      console.log('DEBUG - Complete rating fetched with', completeRating.images.length, 'images');
       return completeRating;
     });
 

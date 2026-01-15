@@ -861,11 +861,8 @@ class ProductService {
         }
 
         logger.info(`Product created: ${product.id} with ${flattenedVariants.length} variants`);
-        console.log('📦 Product created with variants:');
         product.variants.forEach(variant => {
-        console.log(`  ${variant.color} - ${variant.size}:`);
-        console.log(`    Variant Codes: ${variant.variantCodes.length > 0 ? variant.variantCodes.join(', ') : 'None'}`);
-        console.log(`    SKU: ${variant.sku || 'Not set'}`);
+        logger.info(`    SKU: ${variant.sku || 'Not set'}`);
         });
         return product;
     }

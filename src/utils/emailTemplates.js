@@ -559,260 +559,260 @@ Nourishing Lives Naturally
 
     // Add these templates to your emailTemplates.js file
 
-adminPasswordReset: (adminData, resetUrl) => {
-  const domain = process.env.DOMAIN_NAME || 'Kachidham Fashions.com';
-  const supportEmail = process.env.SUPPORT_EMAIL || `support@${domain}`;
-  const expiryTime = '1 hour';
-  
-  return {
-    subject: '🔐 Admin Password Reset Request - Kachidham Fashions',
-    html: `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Password Reset - Kachidham Fashions</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #f6f6f6; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
-        .header { background: linear(135deg, #dc2626 0%, #b91c1c 100%); padding: 30px 20px; text-align: center; color: #ffffff; }
-        .header h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
-        .content { padding: 30px; }
-        .alert-badge { background: #fee2e2; color: #dc2626; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; border-left: 4px solid #dc2626; }
-        .reset-section { text-align: center; margin: 30px 0; }
-        .reset-button { display: inline-block; padding: 14px 32px; background: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; margin: 20px 0; }
-        .info-box { background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; }
-        .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #6c757d; font-size: 12px; border-top: 1px solid #e9ecef; }
-        .security-note { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0; color: #92400e; }
-        .admin-badge { background: #dc2626; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block; margin-left: 10px; }
-        @media (max-width: 600px) {
-            .container { border-radius: 0; }
-            .content { padding: 20px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🔐 Admin Password Reset</h1>
-            <p>Kachidham Fashions Administrator Portal</p>
-        </div>
+        adminPasswordReset: (adminData, resetUrl) => {
+        const domain = process.env.DOMAIN_NAME || 'Kachidham Fashions.com';
+        const supportEmail = process.env.SUPPORT_EMAIL || `support@${domain}`;
+        const expiryTime = '1 hour';
         
-        <div class="content">
-            <div class="alert-badge">
-                <strong>Security Alert:</strong> A password reset was requested for your admin account.
+        return {
+            subject: '🔐 Admin Password Reset Request - Kachidham Fashions',
+            html: `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Admin Password Reset - Kachidham Fashions</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #f6f6f6; padding: 20px; }
+                .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+                .header { background: linear(135deg, #dc2626 0%, #b91c1c 100%); padding: 30px 20px; text-align: center; color: #ffffff; }
+                .header h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+                .content { padding: 30px; }
+                .alert-badge { background: #fee2e2; color: #dc2626; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; border-left: 4px solid #dc2626; }
+                .reset-section { text-align: center; margin: 30px 0; }
+                .reset-button { display: inline-block; padding: 14px 32px; background: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: 600; margin: 20px 0; }
+                .info-box { background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; }
+                .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #6c757d; font-size: 12px; border-top: 1px solid #e9ecef; }
+                .security-note { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0; color: #92400e; }
+                .admin-badge { background: #dc2626; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block; margin-left: 10px; }
+                @media (max-width: 600px) {
+                    .container { border-radius: 0; }
+                    .content { padding: 20px; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>🔐 Admin Password Reset</h1>
+                    <p>Kachidham Fashions Administrator Portal</p>
+                </div>
+                
+                <div class="content">
+                    <div class="alert-badge">
+                        <strong>Security Alert:</strong> A password reset was requested for your admin account.
+                    </div>
+                    
+                    <p>Hello <strong>${adminData.name}</strong> <span class="admin-badge">ADMIN</span>,</p>
+                    
+                    <p>We received a request to reset your password for the Kachidham Fashions <strong>Administrator Portal</strong>. If you didn't make this request, please contact the super administrator immediately.</p>
+                    
+                    <div class="reset-section">
+                        <p>To reset your admin password, click the button below:</p>
+                        <a href="${resetUrl}" class="reset-button">Reset Admin Password</a>
+                        <p style="margin-top: 10px; font-size: 14px; color: #666;">
+                            Or copy and paste this link in your browser:<br>
+                            <span style="word-break: break-all; color: #dc2626;">${resetUrl}</span>
+                        </p>
+                    </div>
+                    
+                    <div class="security-note">
+                        <strong>⚠️ Critical Security Information:</strong>
+                        <ul style="margin: 10px 0 0 20px;">
+                            <li>This admin reset link will expire in <strong>${expiryTime}</strong></li>
+                            <li><strong>DO NOT</strong> share this link with anyone</li>
+                            <li>This provides access to sensitive admin functions</li>
+                            <li>Monitor your account for any suspicious activity</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="info-box">
+                        <h3 style="color: #495057; margin-bottom: 10px;">🛡️ Admin Security</h3>
+                        <p style="margin: 5px 0;">If you're having issues or suspect unauthorized access:</p>
+                        <p style="margin: 5px 0;">
+                            <strong>Contact Super Admin:</strong> 
+                            <a href="mailto:${supportEmail}" style="color: #dc2626; text-decoration: none;">${supportEmail}</a>
+                        </p>
+                        <p style="margin: 5px 0;"><strong>Response Priority:</strong> Immediate attention</p>
+                    </div>
+                    
+                    <p style="font-size: 14px; color: #666; margin-top: 20px;">
+                        <strong>Note:</strong> This reset is for admin access only and provides elevated privileges to the system.
+                    </p>
+                </div>
+                
+                <div class="footer">
+                    <p>This is an automated security email for Kachidham Fashions Administrators</p>
+                    <p style="margin-top: 8px;">
+                        <strong>Kachidham Fashions</strong><br>
+                        Administrator Portal - Secure Access
+                    </p>
+                </div>
             </div>
-            
-            <p>Hello <strong>${adminData.name}</strong> <span class="admin-badge">ADMIN</span>,</p>
-            
-            <p>We received a request to reset your password for the Kachidham Fashions <strong>Administrator Portal</strong>. If you didn't make this request, please contact the super administrator immediately.</p>
-            
-            <div class="reset-section">
-                <p>To reset your admin password, click the button below:</p>
-                <a href="${resetUrl}" class="reset-button">Reset Admin Password</a>
-                <p style="margin-top: 10px; font-size: 14px; color: #666;">
-                    Or copy and paste this link in your browser:<br>
-                    <span style="word-break: break-all; color: #dc2626;">${resetUrl}</span>
-                </p>
-            </div>
-            
-            <div class="security-note">
-                <strong>⚠️ Critical Security Information:</strong>
-                <ul style="margin: 10px 0 0 20px;">
-                    <li>This admin reset link will expire in <strong>${expiryTime}</strong></li>
-                    <li><strong>DO NOT</strong> share this link with anyone</li>
-                    <li>This provides access to sensitive admin functions</li>
-                    <li>Monitor your account for any suspicious activity</li>
-                </ul>
-            </div>
-            
-            <div class="info-box">
-                <h3 style="color: #495057; margin-bottom: 10px;">🛡️ Admin Security</h3>
-                <p style="margin: 5px 0;">If you're having issues or suspect unauthorized access:</p>
-                <p style="margin: 5px 0;">
-                    <strong>Contact Super Admin:</strong> 
-                    <a href="mailto:${supportEmail}" style="color: #dc2626; text-decoration: none;">${supportEmail}</a>
-                </p>
-                <p style="margin: 5px 0;"><strong>Response Priority:</strong> Immediate attention</p>
-            </div>
-            
-            <p style="font-size: 14px; color: #666; margin-top: 20px;">
-                <strong>Note:</strong> This reset is for admin access only and provides elevated privileges to the system.
-            </p>
-        </div>
+        </body>
+        </html>
+            `,
+            text: `
+        ADMIN PASSWORD RESET REQUEST - Kachidham Fashions
+
+        Hello ${adminData.name} (ADMIN),
+
+        We received a request to reset your password for the Kachidham Fashions Administrator Portal.
+
+        To reset your admin password, visit this link:
+        ${resetUrl}
+
+        CRITICAL SECURITY INFORMATION:
+        - This admin reset link will expire in 1 hour
+        - DO NOT share this link with anyone
+        - This provides access to sensitive admin functions
+        - Monitor your account for any suspicious activity
+
+        If you didn't request this reset, contact the super administrator immediately.
+
+        Contact Super Admin: ${supportEmail}
+        Response Priority: Immediate attention
+
+        Note: This reset is for admin access only and provides elevated privileges to the system.
+
+        This is an automated security email for Kachidham Fashions Administrators.
+
+        Kachidham Fashions
+        Administrator Portal - Secure Access
+            `.trim()
+        };
+        },
+
+        adminPasswordChangedConfirmation: (adminData) => {
+        const domain = process.env.DOMAIN_NAME || 'Kachidham Fashions.com';
+        const supportEmail = process.env.SUPPORT_EMAIL || `support@${domain}`;
+        const timestamp = new Date().toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZoneName: 'short'
+        });
         
-        <div class="footer">
-            <p>This is an automated security email for Kachidham Fashions Administrators</p>
-            <p style="margin-top: 8px;">
-                <strong>Kachidham Fashions</strong><br>
-                Administrator Portal - Secure Access
-            </p>
-        </div>
-    </div>
-</body>
-</html>
-    `,
-    text: `
-ADMIN PASSWORD RESET REQUEST - Kachidham Fashions
-
-Hello ${adminData.name} (ADMIN),
-
-We received a request to reset your password for the Kachidham Fashions Administrator Portal.
-
-To reset your admin password, visit this link:
-${resetUrl}
-
-CRITICAL SECURITY INFORMATION:
-- This admin reset link will expire in 1 hour
-- DO NOT share this link with anyone
-- This provides access to sensitive admin functions
-- Monitor your account for any suspicious activity
-
-If you didn't request this reset, contact the super administrator immediately.
-
-Contact Super Admin: ${supportEmail}
-Response Priority: Immediate attention
-
-Note: This reset is for admin access only and provides elevated privileges to the system.
-
-This is an automated security email for Kachidham Fashions Administrators.
-
-Kachidham Fashions
-Administrator Portal - Secure Access
-    `.trim()
-  };
-},
-
-adminPasswordChangedConfirmation: (adminData) => {
-  const domain = process.env.DOMAIN_NAME || 'Kachidham Fashions.com';
-  const supportEmail = process.env.SUPPORT_EMAIL || `support@${domain}`;
-  const timestamp = new Date().toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZoneName: 'short'
-  });
-  
-  return {
-    subject: '✅ Admin Password Changed Successfully - Kachidham Fashions',
-    html: `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Password Changed - Kachidham Fashions</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #f6f6f6; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
-        .header { background: linear(135deg, #059669 0%, #047857 100%); padding: 30px 20px; text-align: center; color: #ffffff; }
-        .header h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
-        .content { padding: 30px; }
-        .success-badge { background: #d1fae5; color: #065f46; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; border-left: 4px solid #059669; }
-        .security-info { background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; }
-        .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #6c757d; font-size: 12px; border-top: 1px solid #e9ecef; }
-        .admin-badge { background: #059669; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block; margin-left: 10px; }
-        .critical-alert { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0; color: #92400e; }
-        @media (max-width: 600px) {
-            .container { border-radius: 0; }
-            .content { padding: 20px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>✅ Admin Password Changed</h1>
-            <p>Kachidham Fashions Administrator Portal</p>
-        </div>
-        
-        <div class="content">
-            <div class="success-badge">
-                <strong>Success:</strong> Your admin password has been updated successfully.
+        return {
+            subject: '✅ Admin Password Changed Successfully - Kachidham Fashions',
+            html: `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Admin Password Changed - Kachidham Fashions</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #f6f6f6; padding: 20px; }
+                .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+                .header { background: linear(135deg, #059669 0%, #047857 100%); padding: 30px 20px; text-align: center; color: #ffffff; }
+                .header h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+                .content { padding: 30px; }
+                .success-badge { background: #d1fae5; color: #065f46; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; border-left: 4px solid #059669; }
+                .security-info { background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; }
+                .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #6c757d; font-size: 12px; border-top: 1px solid #e9ecef; }
+                .admin-badge { background: #059669; color: white; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; display: inline-block; margin-left: 10px; }
+                .critical-alert { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin: 20px 0; color: #92400e; }
+                @media (max-width: 600px) {
+                    .container { border-radius: 0; }
+                    .content { padding: 20px; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>✅ Admin Password Changed</h1>
+                    <p>Kachidham Fashions Administrator Portal</p>
+                </div>
+                
+                <div class="content">
+                    <div class="success-badge">
+                        <strong>Success:</strong> Your admin password has been updated successfully.
+                    </div>
+                    
+                    <p>Hello <strong>${adminData.name}</strong> <span class="admin-badge">ADMIN</span>,</p>
+                    
+                    <p>This email confirms that your Kachidham Fashions <strong>Administrator Portal</strong> password was changed on <strong>${timestamp}</strong>.</p>
+                    
+                    <div class="security-info">
+                        <h3 style="color: #495057; margin-bottom: 15px;">🔒 Admin Security Update</h3>
+                        <ul style="margin-left: 20px;">
+                            <li>Your new admin password is now active</li>
+                            <li>You'll need to use this new password for future admin logins</li>
+                            <li>All existing admin sessions remain active</li>
+                            <li>Regular user accounts are not affected by this change</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="critical-alert">
+                        <p style="margin: 0; color: #92400e;">
+                            <strong>🚨 Security Alert - Unauthorized Change?</strong><br>
+                            If you didn't change your admin password, this could indicate a security breach. 
+                            <strong>Contact the super administrator immediately</strong> at 
+                            <a href="mailto:${supportEmail}" style="color: #92400e; text-decoration: underline; font-weight: bold;">${supportEmail}</a>
+                        </p>
+                    </div>
+                    
+                    <div style="background: #eff6ff; border: 1px solid #3b82f6; border-radius: 8px; padding: 15px; margin: 20px 0;">
+                        <h4 style="color: #1e40af; margin-bottom: 10px;">📋 Next Steps Recommended:</h4>
+                        <ul style="margin-left: 20px; color: #374151;">
+                            <li>Review recent admin activity logs</li>
+                            <li>Verify no unauthorized changes were made</li>
+                            <li>Update any stored credentials</li>
+                        </ul>
+                    </div>
+                    
+                    <p>Thank you for helping us maintain the security of our administrator systems.</p>
+                </div>
+                
+                <div class="footer">
+                    <p>This is an automated security notification for Kachidham Fashions Administrators</p>
+                    <p style="margin-top: 8px;">
+                        <strong>Kachidham Fashions</strong><br>
+                        Administrator Portal - Security First
+                    </p>
+                </div>
             </div>
-            
-            <p>Hello <strong>${adminData.name}</strong> <span class="admin-badge">ADMIN</span>,</p>
-            
-            <p>This email confirms that your Kachidham Fashions <strong>Administrator Portal</strong> password was changed on <strong>${timestamp}</strong>.</p>
-            
-            <div class="security-info">
-                <h3 style="color: #495057; margin-bottom: 15px;">🔒 Admin Security Update</h3>
-                <ul style="margin-left: 20px;">
-                    <li>Your new admin password is now active</li>
-                    <li>You'll need to use this new password for future admin logins</li>
-                    <li>All existing admin sessions remain active</li>
-                    <li>Regular user accounts are not affected by this change</li>
-                </ul>
-            </div>
-            
-            <div class="critical-alert">
-                <p style="margin: 0; color: #92400e;">
-                    <strong>🚨 Security Alert - Unauthorized Change?</strong><br>
-                    If you didn't change your admin password, this could indicate a security breach. 
-                    <strong>Contact the super administrator immediately</strong> at 
-                    <a href="mailto:${supportEmail}" style="color: #92400e; text-decoration: underline; font-weight: bold;">${supportEmail}</a>
-                </p>
-            </div>
-            
-            <div style="background: #eff6ff; border: 1px solid #3b82f6; border-radius: 8px; padding: 15px; margin: 20px 0;">
-                <h4 style="color: #1e40af; margin-bottom: 10px;">📋 Next Steps Recommended:</h4>
-                <ul style="margin-left: 20px; color: #374151;">
-                    <li>Review recent admin activity logs</li>
-                    <li>Verify no unauthorized changes were made</li>
-                    <li>Update any stored credentials</li>
-                </ul>
-            </div>
-            
-            <p>Thank you for helping us maintain the security of our administrator systems.</p>
-        </div>
-        
-        <div class="footer">
-            <p>This is an automated security notification for Kachidham Fashions Administrators</p>
-            <p style="margin-top: 8px;">
-                <strong>Kachidham Fashions</strong><br>
-                Administrator Portal - Security First
-            </p>
-        </div>
-    </div>
-</body>
-</html>
-    `,
-    text: `
-ADMIN PASSWORD CHANGED SUCCESSFULLY - Kachidham Fashions
+        </body>
+        </html>
+            `,
+            text: `
+        ADMIN PASSWORD CHANGED SUCCESSFULLY - Kachidham Fashions
 
-Hello ${adminData.name} (ADMIN),
+        Hello ${adminData.name} (ADMIN),
 
-This email confirms that your Kachidham Fashions Administrator Portal password was changed on ${timestamp}.
+        This email confirms that your Kachidham Fashions Administrator Portal password was changed on ${timestamp}.
 
-ADMIN SECURITY UPDATE:
-- Your new admin password is now active
-- You'll need to use this new password for future admin logins
-- All existing admin sessions remain active
-- Regular user accounts are not affected by this change
+        ADMIN SECURITY UPDATE:
+        - Your new admin password is now active
+        - You'll need to use this new password for future admin logins
+        - All existing admin sessions remain active
+        - Regular user accounts are not affected by this change
 
-🚨 SECURITY ALERT - UNAUTHORIZED CHANGE?
-If you didn't change your admin password, this could indicate a security breach. 
-Contact the super administrator immediately at ${supportEmail}
+        🚨 SECURITY ALERT - UNAUTHORIZED CHANGE?
+        If you didn't change your admin password, this could indicate a security breach. 
+        Contact the super administrator immediately at ${supportEmail}
 
-NEXT STEPS RECOMMENDED:
-- Review recent admin activity logs
-- Verify no unauthorized changes were made
-- Update any stored credentials
+        NEXT STEPS RECOMMENDED:
+        - Review recent admin activity logs
+        - Verify no unauthorized changes were made
+        - Update any stored credentials
 
-Thank you for helping us maintain the security of our administrator systems.
+        Thank you for helping us maintain the security of our administrator systems.
 
-This is an automated security notification for Kachidham Fashions Administrators.
+        This is an automated security notification for Kachidham Fashions Administrators.
 
-Kachidham Fashions
-Administrator Portal - Security First
-    `.trim()
-  };
-},
+        Kachidham Fashions
+        Administrator Portal - Security First
+            `.trim()
+        };
+        },
 
     wholesalerApprovalNotification: (wholesalerData) => {
         const escapeHtml = (text) => {
@@ -2750,138 +2750,158 @@ Administrator Portal - Security First
         };
     },
 
-    orderStatusUpdate: (orderData, oldStatus, newStatus) => {
+    orderStatusUpdate: (orderData, oldStatus, newStatus, adminNotes = null) => {
+
+    
     const orderDate = new Date(orderData.createdAt).toLocaleString('en-US', {
         year: 'numeric',
         month: 'long',
         day: 'numeric'
     });
 
-    return {
-        subject: `Order ${newStatus} - #${orderData.orderNumber} - Kachidham Fashions`,
-        html: `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Order Status Update - Kachidham Fashions</title>
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #f6f6f6; padding: 20px; }
-            .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
-            .header { background: linear(135deg, #2c5aa0 0%, #3a7bd5 100%); padding: 30px 20px; text-align: center; color: #ffffff; }
-            .header h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
-            .content { padding: 30px; }
-            .status-badge { display: inline-block; padding: 8px 16px; background: #28a745; color: white; border-radius: 20px; font-size: 14px; font-weight: bold; margin: 10px 0; }
-            .order-info { background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; }
-            .tracking-info { background: #e3f2fd; border-radius: 8px; padding: 20px; margin: 20px 0; }
-            .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #6c757d; font-size: 12px; border-top: 1px solid #e9ecef; }
-            @media (max-width: 600px) {
-                .container { border-radius: 0; }
-                .content { padding: 20px; }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>📦 Order Status Updated</h1>
-                <p>Your order #${orderData.orderNumber} has been updated</p>
-            </div>
-            
-            <div class="content">
-                <p>Hello <strong>${orderData.name}</strong>,</p>
-                
-                <p>Your order status has been updated from <strong>${oldStatus}</strong> to <strong>${newStatus}</strong>.</p>
-                
-                <div class="order-info">
-                    <h3 style="color: #2c5aa0; margin-bottom: 15px;">Order Details</h3>
-                    <p><strong>Order Number:</strong> ${orderData.orderNumber}</p>
-                    <p><strong>Order Date:</strong> ${orderDate}</p>
-                    <p><strong>Current Status:</strong> <span class="status-badge">${newStatus}</span></p>
-                    <p><strong>Total Amount:</strong> ₹${orderData.totalAmount.toFixed(2)}</p>
-                </div>
-
-                ${orderData.trackingNumber ? `
-                <div class="tracking-info">
-                    <h3 style="color: #1565c0; margin-bottom: 15px;">🚚 Tracking Information</h3>
-                    <p><strong>Tracking Number:</strong> ${orderData.trackingNumber}</p>
-                    <p><strong>Carrier:</strong> ${orderData.carrier}</p>
-                    ${orderData.trackingUrl ? `<p><strong>Track Your Order:</strong> <a href="${orderData.trackingUrl}" style="color: #1565c0;">Click here to track</a></p>` : ''}
-                    ${orderData.estimatedDelivery ? `<p><strong>Estimated Delivery:</strong> ${new Date(orderData.estimatedDelivery).toLocaleDateString()}</p>` : ''}
-                </div>
-                ` : ''}
-
-                ${newStatus === 'SHIPPED' ? `
-                <div style="background: #d4edda; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                    <h4 style="color: #155724; margin-bottom: 10px;">🎉 Your Order is on the Way!</h4>
-                    <p style="margin: 0; color: #155724;">We've shipped your order. You can track its progress using the tracking information above.</p>
-                </div>
-                ` : ''}
-
-                ${newStatus === 'DELIVERED' ? `
-                <div style="background: #d4edda; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                    <h4 style="color: #155724; margin-bottom: 10px;">🎊 Order Delivered Successfully!</h4>
-                    <p style="margin: 0; color: #155724;">Your order has been delivered. We hope you love your purchase!</p>
-                </div>
-                ` : ''}
-
-                <div style="margin-top: 20px;">
-                    <p>Thank you for shopping with Kachidham Fashions!</p>
-                </div>
-            </div>
-            
-            <div class="footer">
-                <p><strong>Kachidham Fashions</strong></p>
-                <p>Nourishing Lives Naturally</p>
-                <p style="margin-top: 15px; font-size: 11px; color: #999;">
-                    This is an automated status update email. Please do not reply to this message.
-                </p>
-            </div>
+     const subject = `Order ${newStatus} - #${orderData.orderNumber} - Kachidham Fashions`;
+    // ✅ Check if adminNotes is being used in the template
+    const adminNotesSection = adminNotes ? `
+        <div class="admin-notes">
+        <h4 style="color: #856404; margin-bottom: 10px;">📝Notes:</h4>
+        <p style="margin: 0; color: #856404; font-style: italic;">"${adminNotes}"</p>
         </div>
-    </body>
-    </html>
-        `,
-        text: `
-    ORDER STATUS UPDATE - Kachidham Fashions
+    ` : '';
 
-    Hello ${orderData.name},
+    const html = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Order Status Update - Kachidham Fashions</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; background: #f6f6f6; padding: 20px; }
+                .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+                .header { background: linear(135deg, #2c5aa0 0%, #3a7bd5 100%); padding: 30px 20px; text-align: center; color: #ffffff; }
+                .header h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+                .content { padding: 30px; }
+                .status-badge { display: inline-block; padding: 8px 16px; background: #28a745; color: white; border-radius: 20px; font-size: 14px; font-weight: bold; margin: 10px 0; }
+                .order-info { background: #f8f9fa; border-radius: 8px; padding: 20px; margin: 20px 0; }
+                .tracking-info { background: #e3f2fd; border-radius: 8px; padding: 20px; margin: 20px 0; }
+                .admin-notes { background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; padding: 15px; margin: 20px 0; }
+                .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #6c757d; font-size: 12px; border-top: 1px solid #e9ecef; }
+                @media (max-width: 600px) {
+                    .container { border-radius: 0; }
+                    .content { padding: 20px; }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>📦 Order Status Updated</h1>
+                    <p>Your order #${orderData.orderNumber} has been updated</p>
+                </div>
+                
+                <div class="content">
+                    <p>Hello <strong>${orderData.name}</strong>,</p>
+                    
+                    <p>Your order status has been updated from <strong>${oldStatus}</strong> to <strong>${newStatus}</strong>.</p>
+                    
+                    ${adminNotesSection}  <!-- ✅ This should render the admin notes -->
+                    
+                    <div class="order-info">
+                        <h3 style="color: #2c5aa0; margin-bottom: 15px;">Order Details</h3>
+                        <p><strong>Order Number:</strong> ${orderData.orderNumber}</p>
+                        <p><strong>Order Date:</strong> ${orderDate}</p>
+                        <p><strong>Current Status:</strong> <span class="status-badge">${newStatus}</span></p>
+                        <p><strong>Total Amount:</strong> ₹${orderData.totalAmount.toFixed(2)}</p>
+                    </div>
 
-    Your order status has been updated from ${oldStatus} to ${newStatus}.
+                    ${orderData.trackingNumber ? `
+                    <div class="tracking-info">
+                        <h3 style="color: #1565c0; margin-bottom: 15px;">🚚 Tracking Information</h3>
+                        <p><strong>Tracking Number:</strong> ${orderData.trackingNumber}</p>
+                        <p><strong>Carrier:</strong> ${orderData.carrier}</p>
+                        ${orderData.trackingUrl ? `<p><strong>Track Your Order:</strong> <a href="${orderData.trackingUrl}" style="color: #1565c0;">Click here to track</a></p>` : ''}
+                        ${orderData.estimatedDelivery ? `<p><strong>Estimated Delivery:</strong> ${new Date(orderData.estimatedDelivery).toLocaleDateString()}</p>` : ''}
+                    </div>
+                    ` : ''}
 
-    ORDER DETAILS:
-    --------------
-    Order Number: ${orderData.orderNumber}
-    Order Date: ${orderDate}
-    Current Status: ${newStatus}
-    Total Amount: ₹${orderData.totalAmount.toFixed(2)}
+                    ${newStatus === 'SHIPPED' ? `
+                    <div style="background: #d4edda; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <h4 style="color: #155724; margin-bottom: 10px;">🎉 Your Order is on the Way!</h4>
+                        <p style="margin: 0; color: #155724;">We've shipped your order. You can track its progress using the tracking information above.</p>
+                    </div>
+                    ` : ''}
 
-    ${orderData.trackingNumber ? `
-    TRACKING INFORMATION:
-    ---------------------
-    Tracking Number: ${orderData.trackingNumber}
-    Carrier: ${orderData.carrier}
-    ${orderData.trackingUrl ? `Track Your Order: ${orderData.trackingUrl}\n` : ''}${orderData.estimatedDelivery ? `Estimated Delivery: ${new Date(orderData.estimatedDelivery).toLocaleDateString()}\n` : ''}
-    ` : ''}
+                    ${newStatus === 'DELIVERED' ? `
+                    <div style="background: #d4edda; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                        <h4 style="color: #155724; margin-bottom: 10px;">🎊 Order Delivered Successfully!</h4>
+                        <p style="margin: 0; color: #155724;">Your order has been delivered. We hope you love your purchase!</p>
+                    </div>
+                    ` : ''}
 
-    ${newStatus === 'SHIPPED' ? `
-    🎉 Your Order is on the Way!
-    We've shipped your order. You can track its progress using the tracking information above.
-    ` : ''}
+                    <div style="margin-top: 20px;">
+                        <p>Thank you for shopping with Kachidham Fashions!</p>
+                    </div>
+                </div>
+                
+                <div class="footer">
+                    <p><strong>Kachidham Fashions</strong></p>
+                    <p>Nourishing Lives Naturally</p>
+                    <p style="margin-top: 15px; font-size: 11px; color: #999;">
+                        This is an automated status update email. Please do not reply to this message.
+                    </p>
+                </div>
+            </div>
+        </body>
+        </html>
+    `;
 
-    ${newStatus === 'DELIVERED' ? `
-    🎊 Order Delivered Successfully!
-    Your order has been delivered. We hope you love your purchase!
-    ` : ''}
+    const text = `
+        ORDER STATUS UPDATE - Kachidham Fashions
 
-    Thank you for shopping with Kachidham Fashions!
+        Hello ${orderData.name},
 
-    --
-    Kachidham Fashions
-    Nourishing Lives Naturally
-        `.trim()
-    };
+        Your order status has been updated from ${oldStatus} to ${newStatus}.
+
+        ${adminNotes ? `
+        📝 ADMIN NOTES:
+        "${adminNotes}"
+
+        ` : ''}
+
+        ORDER DETAILS:
+        --------------
+        Order Number: ${orderData.orderNumber}
+        Order Date: ${orderDate}
+        Current Status: ${newStatus}
+        Total Amount: ₹${orderData.totalAmount.toFixed(2)}
+
+        ${orderData.trackingNumber ? `
+        TRACKING INFORMATION:
+        ---------------------
+        Tracking Number: ${orderData.trackingNumber}
+        Carrier: ${orderData.carrier}
+        ${orderData.trackingUrl ? `Track Your Order: ${orderData.trackingUrl}\n` : ''}${orderData.estimatedDelivery ? `Estimated Delivery: ${new Date(orderData.estimatedDelivery).toLocaleDateString()}\n` : ''}
+        ` : ''}
+
+        ${newStatus === 'SHIPPED' ? `
+        🎉 Your Order is on the Way!
+        We've shipped your order. You can track its progress using the tracking information above.
+        ` : ''}
+
+        ${newStatus === 'DELIVERED' ? `
+        🎊 Order Delivered Successfully!
+        Your order has been delivered. We hope you love your purchase!
+        ` : ''}
+
+        Thank you for shopping with Kachidham Fashions!
+
+        --
+        Kachidham Fashions
+        Nourishing Lives Naturally
+    `.trim();
+
+    return { subject, html, text };
     },
 
     orderRefundNotification: (orderData, refundData) => {
