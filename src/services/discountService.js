@@ -585,121 +585,6 @@ class DiscountService {
     };
   }
 
-  // Validate discount code
-  async validateDiscount(code, userId, orderAmount = 0) {
-    const discount = await prisma.discount.findFirst({
-      where: {
-        name: code, // Using name as discount code
-        isActive: true
-      },
-      include: {
-        product: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        category: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        subcategory: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
-    });
-    
-    if (!discount) {
-      return {
-        isValid: false,
-        message: 'Invalid discount code'
-      };
-    }
-    
-    const now = new Date();
-    if (now < discount.validFrom) {
-      return {
-        isValid: false,
-        message: 'Discount not yet valid'
-      };
-    }
-    
-    if (now > discount.validUntil) {
-      return {
-        isValid: false,
-        message: 'Discount has expired'
-      };
-    }
-    
-    // Check usage limit
-    if (discount.usageLimit && discount.usedCount >= discount.usageLimit) {
-      return {
-        isValid: false,
-        message: 'Discount usage limit reached'
-      };
-    }
-    
-    // Check per user limit
-    if (discount.perUserLimit > 0 && userId) {
-      const userUsageCount = await prisma.discountUsage.count({
-        where: {
-          discountId: discount.id,
-          userId
-        }
-      });
-      
-      if (userUsageCount >= discount.perUserLimit) {
-        return {
-          isValid: false,
-          message: 'You have reached the usage limit for this discount'
-        };
-      }
-    }
-    
-    // Check minimum order amount
-    if (orderAmount < discount.minOrderAmount) {
-      return {
-        isValid: false,
-        message: `Minimum order amount of ₹${discount.minOrderAmount} required`
-      };
-    }
-    
-    // Calculate discount amount
-    let discountAmount = 0;
-    let maxDiscountReached = false;
-    
-    if (discount.discountType === 'PERCENTAGE') {
-      discountAmount = (orderAmount * discount.discountValue) / 100;
-      if (discount.maxDiscount && discountAmount > discount.maxDiscount) {
-        discountAmount = discount.maxDiscount;
-        maxDiscountReached = true;
-      }
-    } else {
-      discountAmount = discount.discountValue;
-    }
-    
-    return {
-      isValid: true,
-      discount: {
-        id: discount.id,
-        name: discount.name,
-        description: discount.description,
-        discountType: discount.discountType,
-        discountValue: discount.discountValue,
-        maxDiscount: discount.maxDiscount,
-        discountAmount,
-        maxDiscountReached,
-        product: discount.product,
-        category: discount.category,
-        subcategory: discount.subcategory
-      }
-    };
-  }
 
 
 // Get applicable discounts for a product
@@ -1031,60 +916,6 @@ async calculateProductDiscount(productId, userId = null) {
   };
 }
 
-// Apply discount to cart items
-  async applyDiscountToCart(cartItems, userId) {
-    let totalDiscount = 0;
-    const appliedDiscounts = [];
-    const cartWithDiscounts = [];
-
-    for (const item of cartItems) {
-      const productDiscount = await this.calculateProductDiscount(item.productId, userId);
-      
-      if (productDiscount.hasDiscount) {
-        const itemDiscount = productDiscount.discountAmount * item.quantity;
-        totalDiscount += itemDiscount;
-        
-        appliedDiscounts.push({
-          productId: item.productId,
-          discount: productDiscount.bestDiscount,
-          amount: itemDiscount,
-          perUnit: productDiscount.discountAmount
-        });
-        
-        cartWithDiscounts.push({
-          ...item,
-          originalPrice: productDiscount.originalPrice,
-          discountedPrice: productDiscount.finalPrice,
-          discountApplied: productDiscount.discountAmount,
-          discountType: productDiscount.bestDiscount.discountType,
-          discountCode: productDiscount.bestDiscount.name
-        });
-      } else {
-        cartWithDiscounts.push({
-          ...item,
-          originalPrice: item.price,
-          discountedPrice: item.price,
-          discountApplied: 0,
-          discountType: null,
-          discountCode: null
-        });
-      }
-    }
-
-    const subtotal = cartItems.reduce((sum, item) => 
-      sum + (item.price * item.quantity), 0
-    );
-    
-    const finalTotal = Math.max(0, subtotal - totalDiscount);
-
-    return {
-      subtotal,
-      totalDiscount,
-      finalTotal,
-      appliedDiscounts,
-      cartItems: cartWithDiscounts
-    };
-  }
 
 
   // services/discountService.js - Add these methods
@@ -1110,73 +941,68 @@ async getDiscountByIdOrName(identifier) {
   return discount;
 }
 
-// Calculate cart discounts
+// services/discountService.js - FIXED calculateCartDiscounts method
 async calculateCartDiscounts(cartItems, userId, discountCode = null) {
   let totalDiscount = 0;
   const appliedDiscounts = [];
   const errors = [];
   
-  // Validate discount code if provided
-  let discount = null;
-  if (discountCode) {
-    const validation = await this.validateDiscount(discountCode, userId);
-    if (!validation.isValid) {
-      errors.push(validation.message);
-    } else {
-      discount = validation.discount;
-    }
-  }
-  
   // Calculate base subtotal
   const subtotal = cartItems.reduce((sum, item) => {
-    return sum + (item.product.offerPrice || item.product.normalPrice) * item.quantity;
+    const price = item.product.offerPrice || item.product.normalPrice;
+    return sum + (price * item.quantity);
   }, 0);
   
-  // Apply discount if valid
-  let discountAmount = 0;
-  if (discount && discount.isValid) {
-    // Check minimum order amount for discount
-    if (subtotal >= discount.minOrderAmount) {
-      if (discount.discountType === 'PERCENTAGE') {
-        discountAmount = (subtotal * discount.discountValue) / 100;
-        if (discount.maxDiscount && discountAmount > discount.maxDiscount) {
-          discountAmount = discount.maxDiscount;
-        }
+  // Validate and apply discount code FIRST (order-level discount)
+  if (discountCode) {
+    try {
+      const validation = await this.validateDiscount(discountCode, userId, subtotal);
+      
+      if (validation.isValid) {
+        const discount = validation.discount;
+        let discountAmount = discount.discountAmount;
+        
+        // Apply order-level discount
+        totalDiscount += discountAmount;
+        appliedDiscounts.push({
+          type: 'ORDER_LEVEL',
+          code: discountCode,
+          name: discount.name,
+          discountType: discount.discountType,
+          discountValue: discount.discountValue,
+          amount: discountAmount,
+          description: 'Applied to entire order'
+        });
       } else {
-        discountAmount = discount.discountValue;
+        errors.push(validation.message);
       }
-      
-      appliedDiscounts.push({
-        code: discountCode,
-        name: discount.name,
-        type: discount.discountType,
-        value: discount.discountValue,
-        amount: discountAmount
-      });
-      
-      totalDiscount += discountAmount;
-    } else {
-      errors.push(`Minimum order amount of ₹${discount.minOrderAmount} required for this discount`);
+    } catch (error) {
+      errors.push(error.message);
     }
   }
   
-  // Apply product-specific discounts
+  // Apply product-specific discounts SECOND
   for (const item of cartItems) {
     const productDiscounts = await this.getProductDiscounts(item.productId, userId);
     
     if (productDiscounts.length > 0) {
-      // Get best discount for this product
       const bestDiscount = this.getBestProductDiscount(productDiscounts, item);
       
       if (bestDiscount) {
-        const itemDiscount = bestDiscount.calculatedAmount * item.quantity;
-        totalDiscount += itemDiscount;
+        // Apply the discount ONCE for this product (not multiplied by quantity)
+        // FIXED: Only apply discount once per product entry, not per quantity
+        const itemDiscount = bestDiscount.calculatedAmount;
         
+        totalDiscount += itemDiscount;
         appliedDiscounts.push({
+          type: 'PRODUCT_LEVEL',
           productId: item.productId,
+          productName: item.product?.name,
           discount: bestDiscount,
           amount: itemDiscount,
-          type: bestDiscount.discountType
+          discountType: bestDiscount.discountType,
+          description: `Applied to ${item.product?.name}`,
+          quantity: item.quantity
         });
       }
     }
@@ -1190,10 +1016,174 @@ async calculateCartDiscounts(cartItems, userId, discountCode = null) {
     finalTotal: parseFloat(finalTotal.toFixed(2)),
     appliedDiscounts,
     errors: errors.length > 0 ? errors : null,
-    discountCode: discountCode
+    discountCode
   };
 }
 
+
+
+// FIXED calculateFinalAmountWithDiscounts method
+async calculateFinalAmountWithDiscounts(cartData, userId, discountCode = null) {
+  const { cartItems, shippingState } = cartData;
+  
+  // Calculate subtotal from cart items
+  let subtotal = 0;
+  const itemsWithDetails = [];
+  
+  for (const item of cartItems) {
+    const product = await prisma.product.findUnique({
+      where: { id: item.productId },
+      select: {
+        id: true,
+        name: true,
+        normalPrice: true,
+        offerPrice: true,
+        status: true
+      }
+    });
+    
+    if (!product) {
+      throw new Error(`Product ${item.productId} not found`);
+    }
+    
+    const price = product.offerPrice || product.normalPrice;
+    const itemTotal = price * item.quantity;
+    subtotal += itemTotal;
+    
+    itemsWithDetails.push({
+      product,
+      price,
+      quantity: item.quantity,
+      itemTotal
+    });
+  }
+  
+  // Apply discounts using the FIXED calculateCartDiscounts method
+  const discountResult = await this.calculateCartDiscounts(
+    itemsWithDetails.map(item => ({
+      ...item,
+      product: item.product
+    })),
+    userId,
+    discountCode
+  );
+  
+  // Calculate shipping based on state
+  const shippingCost = this.calculateShippingCost(shippingState);
+  
+  // Calculate final total
+  const finalTotal = Math.max(0, (subtotal - discountResult.totalDiscount + shippingCost));
+  
+  return {
+    success: true,
+    data: {
+      subtotal: parseFloat(subtotal.toFixed(2)),
+      totalDiscount: discountResult.totalDiscount,
+      shipping: parseFloat(shippingCost.toFixed(2)),
+      finalTotal: parseFloat(finalTotal.toFixed(2)),
+      appliedDiscounts: discountResult.appliedDiscounts,
+      errors: discountResult.errors,
+      discountCode
+    }
+  };
+}
+
+// FIXED applyDiscountToCart method
+async applyDiscountToCart(cartItems, userId) {
+  let totalDiscount = 0;
+  const appliedDiscounts = [];
+  const cartWithDiscounts = [];
+
+  for (const item of cartItems) {
+    const productDiscounts = await this.getProductDiscounts(item.productId, userId);
+    
+    if (productDiscounts.length > 0) {
+      const bestDiscount = this.getBestProductDiscount(productDiscounts, item);
+      
+      if (bestDiscount) {
+        // FIXED: Apply discount ONCE, not multiplied by quantity
+        const itemDiscount = bestDiscount.calculatedAmount;
+        totalDiscount += itemDiscount;
+        
+        appliedDiscounts.push({
+          productId: item.productId,
+          discount: bestDiscount,
+          amount: itemDiscount, // Single discount amount
+          perUnit: bestDiscount.calculatedAmount
+        });
+        
+        cartWithDiscounts.push({
+          ...item,
+          originalPrice: item.price,
+          discountedPrice: Math.max(0, item.price - (bestDiscount.calculatedAmount / item.quantity)), // Adjust per unit
+          discountApplied: bestDiscount.calculatedAmount, // Total discount for this product
+          discountType: bestDiscount.discountType,
+          discountCode: bestDiscount.name
+        });
+      } else {
+        cartWithDiscounts.push({
+          ...item,
+          originalPrice: item.price,
+          discountedPrice: item.price,
+          discountApplied: 0,
+          discountType: null,
+          discountCode: null
+        });
+      }
+    } else {
+      cartWithDiscounts.push({
+        ...item,
+        originalPrice: item.price,
+        discountedPrice: item.price,
+        discountApplied: 0,
+        discountType: null,
+        discountCode: null
+      });
+    }
+  }
+
+  const subtotal = cartItems.reduce((sum, item) => 
+    sum + (item.price * item.quantity), 0
+  );
+  
+  const finalTotal = Math.max(0, subtotal - totalDiscount);
+
+  return {
+    subtotal,
+    totalDiscount,
+    finalTotal,
+    appliedDiscounts,
+    cartItems: cartWithDiscounts
+  };
+}
+
+// Add this helper method to handle quantity-based discounts properly
+calculateDiscountForItem(discount, price, quantity) {
+  switch (discount.discountType) {
+    case 'PERCENTAGE':
+      const percentageDiscount = (price * discount.discountValue) / 100;
+      const cappedDiscount = discount.maxDiscount 
+        ? Math.min(percentageDiscount, discount.maxDiscount) 
+        : percentageDiscount;
+      // For percentage, apply ONCE per product
+      return cappedDiscount;
+      
+    case 'FIXED_AMOUNT':
+      // For fixed amount, apply ONCE per product
+      return Math.min(discount.discountValue, price);
+      
+    case 'BUY_X_GET_Y':
+      // For buy X get Y, calculate based on quantity
+      if (discount.minQuantity && quantity >= discount.minQuantity) {
+        const freeItems = Math.floor(quantity / discount.minQuantity);
+        return Math.min(freeItems * discount.discountValue, price * freeItems);
+      }
+      return 0;
+      
+    default:
+      return Math.min(discount.discountValue, price);
+  }
+}
 // Helper to get best product discount
 getBestProductDiscount(discounts, cartItem) {
   const price = cartItem.product.offerPrice || cartItem.product.normalPrice;
@@ -1236,6 +1226,7 @@ getBestProductDiscount(discounts, cartItem) {
   
   return bestDiscount;
 }
+
 
 async validateDiscount(code, userId, orderAmount = 0) {
   try {
