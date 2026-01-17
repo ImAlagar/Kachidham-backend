@@ -1216,6 +1216,13 @@ getBestProductDiscount(discounts, cartItem) {
     } else if (discount.discountType === 'FIXED_AMOUNT') {
       discountAmount = Math.min(discount.discountValue, price);
     }
+    else if (discount.discountType === 'BUY_X_GET_Y') {
+        if (cartItem.quantity >= (discount.minQuantity || 1)) {
+          discountAmount = discount.discountValue;
+        } else {
+          discountAmount = 0;
+        }
+      }
     
     if (discountAmount > maxDiscountAmount) {
       maxDiscountAmount = discountAmount;
