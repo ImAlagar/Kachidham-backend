@@ -954,32 +954,35 @@ async calculateCartDiscounts(cartItems, userId, discountCode = null) {
   }, 0);
   
   // Validate and apply discount code FIRST (order-level discount)
-  if (discountCode) {
-    try {
-      const validation = await this.validateDiscount(discountCode, userId, subtotal);
+if (discountCode) {
+  try {
+    const validation = await this.validateDiscount(discountCode, userId, subtotal);
+    
+    if (validation.isValid) {
+      const discount = validation.discount;
+      let discountAmount = discount.discountAmount;
       
-      if (validation.isValid) {
-        const discount = validation.discount;
-        let discountAmount = discount.discountAmount;
-        
-        // Apply order-level discount
-        totalDiscount += discountAmount;
-        appliedDiscounts.push({
-          type: 'ORDER_LEVEL',
-          code: discountCode,
-          name: discount.name,
-          discountType: discount.discountType,
-          discountValue: discount.discountValue,
-          amount: discountAmount,
-          description: 'Applied to entire order'
-        });
-      } else {
-        errors.push(validation.message);
-      }
-    } catch (error) {
-      errors.push(error.message);
+      // Apply order-level discount
+      totalDiscount += discountAmount;
+      appliedDiscounts.push({
+        type: 'ORDER_LEVEL',
+        code: discountCode,
+        name: discount.name,
+        discountType: discount.discountType,
+        discountValue: discount.discountValue,
+        amount: discountAmount,
+        description: 'Applied to entire order'
+      });
+    } else {
+      // ⛔ THROW EXACT VALIDATION ERROR
+      throw new Error(validation.message);
     }
+
+  } catch (error) {
+    errors.push(error.message);  // error.message contains EXACT validation.message
   }
+}
+
   
   // Apply product-specific discounts SECOND
   for (const item of cartItems) {
