@@ -44,6 +44,7 @@ router.post(
 
 router.get(
   "/",
+  auth,
   validateDiscountQuery,
   getAllDiscounts
 );

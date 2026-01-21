@@ -946,80 +946,98 @@ async calculateCartDiscounts(cartItems, userId, discountCode = null) {
   let totalDiscount = 0;
   const appliedDiscounts = [];
   const errors = [];
-  
-  // Calculate base subtotal
+
+  // ---------------- SUBTOTAL ----------------
   const subtotal = cartItems.reduce((sum, item) => {
     const price = item.product.offerPrice || item.product.normalPrice;
-    return sum + (price * item.quantity);
+    return sum + price * item.quantity;
   }, 0);
-  
-  // Validate and apply discount code FIRST (order-level discount)
-if (discountCode) {
-  try {
-    const validation = await this.validateDiscount(discountCode, userId, subtotal);
-    
-    if (validation.isValid) {
+
+  // =====================================================
+  // 1️⃣ USER ENTERED COUPON → APPLY ONLY COUPON
+  // =====================================================
+  if (discountCode) {
+    try {
+      const validation = await this.validateDiscount(
+        discountCode,
+        userId,
+        subtotal
+      );
+
+      if (!validation.isValid) {
+        throw new Error(validation.message);
+      }
+
       const discount = validation.discount;
-      let discountAmount = discount.discountAmount;
-      
-      // Apply order-level discount
-      totalDiscount += discountAmount;
+
+      totalDiscount += discount.discountAmount;
+
       appliedDiscounts.push({
-        type: 'ORDER_LEVEL',
+        type: "ORDER_LEVEL",
         code: discountCode,
         name: discount.name,
         discountType: discount.discountType,
         discountValue: discount.discountValue,
-        amount: discountAmount,
-        description: 'Applied to entire order'
+        amount: discount.discountAmount,
+        description: "User applied coupon"
       });
-    } else {
-      // ⛔ THROW EXACT VALIDATION ERROR
-      throw new Error(validation.message);
+
+    } catch (error) {
+      errors.push(error.message);
     }
 
-  } catch (error) {
-    errors.push(error.message);  // error.message contains EXACT validation.message
-  }
-}
+    const finalTotal = Math.max(0, subtotal - totalDiscount);
 
-  
-  // Apply product-specific discounts SECOND
+    return {
+      subtotal: Number(subtotal.toFixed(2)),
+      totalDiscount: Number(totalDiscount.toFixed(2)),
+      finalTotal: Number(finalTotal.toFixed(2)),
+      appliedDiscounts,
+      errors: errors.length ? errors : null,
+      discountCode
+    };
+  }
+
+  // =====================================================
+  // 2️⃣ NO COUPON → AUTO APPLY BEST PRODUCT DISCOUNTS
+  // =====================================================
   for (const item of cartItems) {
-    const productDiscounts = await this.getProductDiscounts(item.productId, userId);
-    
-    if (productDiscounts.length > 0) {
-      const bestDiscount = this.getBestProductDiscount(productDiscounts, item);
-      
-      if (bestDiscount) {
-        // Apply the discount ONCE for this product (not multiplied by quantity)
-        // FIXED: Only apply discount once per product entry, not per quantity
-        const itemDiscount = bestDiscount.calculatedAmount;
-        
-        totalDiscount += itemDiscount;
-        appliedDiscounts.push({
-          type: 'PRODUCT_LEVEL',
-          productId: item.productId,
-          productName: item.product?.name,
-          discount: bestDiscount,
-          amount: itemDiscount,
-          discountType: bestDiscount.discountType,
-          description: `Applied to ${item.product?.name}`,
-          quantity: item.quantity
-        });
-      }
-    }
+    const productDiscounts = await this.getProductDiscounts(
+      item.productId,
+      userId
+    );
+
+    if (!productDiscounts.length) continue;
+
+    const bestDiscount = this.getBestProductDiscount(
+      productDiscounts,
+      item
+    );
+
+    if (!bestDiscount) continue;
+
+    totalDiscount += bestDiscount.calculatedAmount;
+
+    appliedDiscounts.push({
+      type: "PRODUCT_LEVEL",
+      productId: item.productId,
+      productName: item.product?.name,
+      discountType: bestDiscount.discountType,
+      discountValue: bestDiscount.discountValue,
+      amount: bestDiscount.calculatedAmount,
+      description: "Automatic best offer applied"
+    });
   }
-  
+
   const finalTotal = Math.max(0, subtotal - totalDiscount);
-  
+
   return {
-    subtotal: parseFloat(subtotal.toFixed(2)),
-    totalDiscount: parseFloat(totalDiscount.toFixed(2)),
-    finalTotal: parseFloat(finalTotal.toFixed(2)),
+    subtotal: Number(subtotal.toFixed(2)),
+    totalDiscount: Number(totalDiscount.toFixed(2)),
+    finalTotal: Number(finalTotal.toFixed(2)),
     appliedDiscounts,
-    errors: errors.length > 0 ? errors : null,
-    discountCode
+    errors: null,
+    discountCode: null
   };
 }
 
@@ -1189,46 +1207,62 @@ calculateDiscountForItem(discount, price, quantity) {
 }
 // Helper to get best product discount
 getBestProductDiscount(discounts, cartItem) {
-  const price = cartItem.product.offerPrice || cartItem.product.normalPrice;
+  const unitPrice =
+    cartItem.product.offerPrice || cartItem.product.normalPrice;
+
+  const totalPrice = unitPrice * cartItem.quantity;
+
   let bestDiscount = null;
   let maxDiscountAmount = 0;
-  
+
   for (const discount of discounts) {
-    // Check quantity requirements
-    if (discount.minQuantity && cartItem.quantity < discount.minQuantity) {
+    if (
+      discount.minQuantity &&
+      cartItem.quantity < discount.minQuantity
+    ) {
       continue;
     }
-    
+
     let discountAmount = 0;
-    
-    if (discount.discountType === 'PERCENTAGE') {
-      discountAmount = (price * discount.discountValue) / 100;
-      if (discount.maxDiscount && discountAmount > discount.maxDiscount) {
-        discountAmount = discount.maxDiscount;
-      }
-    } else if (discount.discountType === 'FIXED_AMOUNT') {
-      discountAmount = Math.min(discount.discountValue, price);
-    }
-    else if (discount.discountType === 'BUY_X_GET_Y') {
-        if (cartItem.quantity >= (discount.minQuantity || 1)) {
-          discountAmount = discount.discountValue;
-        } else {
-          discountAmount = 0;
+
+    switch (discount.discountType) {
+      case "PERCENTAGE":
+        discountAmount = (totalPrice * discount.discountValue) / 100;
+        if (discount.maxDiscount) {
+          discountAmount = Math.min(
+            discountAmount,
+            discount.maxDiscount
+          );
         }
-      }
-    
+        break;
+
+      case "FIXED_AMOUNT":
+        discountAmount = Math.min(
+          discount.discountValue,
+          totalPrice
+        );
+        break;
+
+      case "BUY_X_GET_Y":
+        if (cartItem.quantity >= discount.minQuantity) {
+          discountAmount = discount.discountValue;
+        }
+        break;
+    }
+
     if (discountAmount > maxDiscountAmount) {
       maxDiscountAmount = discountAmount;
       bestDiscount = {
         ...discount,
         calculatedAmount: discountAmount,
-        finalPrice: Math.max(0, price - discountAmount)
+        finalPrice: Math.max(0, totalPrice - discountAmount)
       };
     }
   }
-  
+
   return bestDiscount;
 }
+
 
 
 async validateDiscount(code, userId, orderAmount = 0) {
