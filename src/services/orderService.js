@@ -1580,6 +1580,56 @@ async updateOrderStatus(orderId, statusData) {
     };
   }
 
+
+  // Add to OrderService class
+async deleteOrder(orderId) {
+  // Check if order exists
+  const order = await prisma.order.findUnique({
+    where: { id: orderId }
+  });
+
+  if (!order) {
+    throw new Error('Order not found');
+  }
+
+  // Prevent deletion if order is already shipped/delivered
+  if (['SHIPPED', 'DELIVERED'].includes(order.status)) {
+    throw new Error(`Cannot delete order with status: ${order.status}`);
+  }
+
+  // Restore stock before deleting
+  const orderItems = await prisma.orderItem.findMany({
+    where: { orderId }
+  });
+
+  for (const item of orderItems) {
+    if (item.productVariantId) {
+      await prisma.productVariant.update({
+        where: { id: item.productVariantId },
+        data: {
+          stock: { increment: item.quantity }
+        }
+      });
+    }
+  }
+
+  // Delete order items first
+  await prisma.orderItem.deleteMany({
+    where: { orderId }
+  });
+
+  // Delete the order
+  await prisma.order.delete({
+    where: { id: orderId }
+  });
+
+  return {
+    success: true,
+    message: 'Order deleted successfully',
+    orderNumber: order.orderNumber
+  };
+}
+
 }
 
 export default new OrderService();

@@ -14,7 +14,8 @@ import {
   calculateOrderTotals,
   createCODOrder,
   testPhonePeIntegration,
-  verifyPaymentAndCreateOrder
+  verifyPaymentAndCreateOrder,
+  deleteOrder
 } from '../controllers/orderController.js';
 import { auth, authorize } from '../middleware/auth.js';
 
@@ -40,6 +41,8 @@ router.get('/admin/stats', auth, authorize('ADMIN'), getOrderStats);
 router.get('/admin/:orderId', auth, authorize('ADMIN'), getOrderById);
 router.patch('/admin/:orderId/status', auth, authorize('ADMIN'), updateOrderStatus);
 router.patch('/admin/:orderId/tracking', auth, authorize('ADMIN'), updateTrackingInfo);
+router.delete('/admin/:orderId', auth, authorize('ADMIN'), deleteOrder);
+
 router.post('/admin/:orderId/refund', auth, authorize('ADMIN'), processRefund);
 
 // Add to routes

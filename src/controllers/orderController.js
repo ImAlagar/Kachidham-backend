@@ -288,7 +288,20 @@ export const checkPaymentStatus = asyncHandler(async (req, res) => {
 });
 
 
-
+// Add this controller function
+export const deleteOrder = asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+  
+  const result = await orderService.deleteOrder(orderId);
+  
+  res.status(200).json({
+    success: true,
+    message: result.message,
+    data: {
+      orderNumber: result.orderNumber
+    }
+  });
+});
 
 // Add to your orderController.js
 export const testPhonePeIntegration = asyncHandler(async (req, res) => {

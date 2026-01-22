@@ -942,102 +942,117 @@ async getDiscountByIdOrName(identifier) {
 }
 
 // services/discountService.js - FIXED calculateCartDiscounts method
-async calculateCartDiscounts(cartItems, userId, discountCode = null) {
+async calculateCartDiscounts(cartItems, userId, selectedDiscountId = null) {
   let totalDiscount = 0;
   const appliedDiscounts = [];
-  const errors = [];
 
-  // ---------------- SUBTOTAL ----------------
   const subtotal = cartItems.reduce((sum, item) => {
     const price = item.product.offerPrice || item.product.normalPrice;
     return sum + price * item.quantity;
   }, 0);
 
+  console.log("💰 SUBTOTAL:", subtotal);
+  console.log("🎯 SELECTED DISCOUNT ID:", selectedDiscountId);
+
   // =====================================================
-  // 1️⃣ USER ENTERED COUPON → APPLY ONLY COUPON
+  // 1️⃣ USER SELECTED DISCOUNT → FORCE APPLY ONLY THAT
   // =====================================================
-  if (discountCode) {
-    try {
-      const validation = await this.validateDiscount(
-        discountCode,
-        userId,
-        subtotal
-      );
+  if (selectedDiscountId) {
+    const discount = await this.getDiscountById(selectedDiscountId);
 
-      if (!validation.isValid) {
-        throw new Error(validation.message);
-      }
+    console.log("🎟️ USER SELECTED DISCOUNT:", discount);
 
-      const discount = validation.discount;
-
-      totalDiscount += discount.discountAmount;
-
-      appliedDiscounts.push({
-        type: "ORDER_LEVEL",
-        code: discountCode,
-        name: discount.name,
-        discountType: discount.discountType,
-        discountValue: discount.discountValue,
-        amount: discount.discountAmount,
-        description: "User applied coupon"
-      });
-
-    } catch (error) {
-      errors.push(error.message);
+    if (!discount || !discount.isActive) {
+      return {
+        subtotal,
+        totalDiscount: 0,
+        finalTotal: subtotal,
+        appliedDiscounts: [],
+        errors: ["Invalid discount"]
+      };
     }
 
-    const finalTotal = Math.max(0, subtotal - totalDiscount);
+    // ✅ PERCENTAGE → TOTAL CART
+    if (discount.discountType === "PERCENTAGE") {
+      totalDiscount = (subtotal * discount.discountValue) / 100;
+
+      if (discount.maxDiscount) {
+        totalDiscount = Math.min(totalDiscount, discount.maxDiscount);
+      }
+
+      console.log(
+        `📉 CART % DISCOUNT: ${discount.discountValue}% =`,
+        totalDiscount
+      );
+    }
+
+    // ✅ QUANTITY BASED
+    else if (
+      discount.discountType === "BUY_X_GET_Y" ||
+      discount.discountType === "QUANTITY_BASED"
+    ) {
+      totalDiscount = discount.discountValue;
+      console.log("📦 QUANTITY DISCOUNT:", totalDiscount);
+    }
+
+    // ✅ FIXED
+    else if (discount.discountType === "FIXED_AMOUNT") {
+      totalDiscount = discount.discountValue;
+    }
+
+    appliedDiscounts.push({
+      type: "USER_SELECTED",
+      name: discount.name,
+      discountType: discount.discountType,
+      amount: totalDiscount
+    });
 
     return {
-      subtotal: Number(subtotal.toFixed(2)),
-      totalDiscount: Number(totalDiscount.toFixed(2)),
-      finalTotal: Number(finalTotal.toFixed(2)),
+      subtotal,
+      totalDiscount,
+      finalTotal: Math.max(0, subtotal - totalDiscount),
       appliedDiscounts,
-      errors: errors.length ? errors : null,
-      discountCode
+      errors: null
     };
   }
 
   // =====================================================
-  // 2️⃣ NO COUPON → AUTO APPLY BEST PRODUCT DISCOUNTS
+  // 2️⃣ NO USER DISCOUNT → AUTO MODE
   // =====================================================
+  console.log("⚙️ AUTO DISCOUNT MODE");
+
   for (const item of cartItems) {
-    const productDiscounts = await this.getProductDiscounts(
-      item.productId,
+    const discounts = await this.getProductDiscounts(
+      item.product.id,
       userId
     );
 
-    if (!productDiscounts.length) continue;
+    console.log("📉 AVAILABLE PRODUCT DISCOUNTS:", discounts);
 
-    const bestDiscount = this.getBestProductDiscount(
-      productDiscounts,
-      item
-    );
+    if (!discounts.length) continue;
 
-    if (!bestDiscount) continue;
+    const best = this.getBestProductDiscount(discounts, item);
 
-    totalDiscount += bestDiscount.calculatedAmount;
+    console.log("🏆 BEST AUTO DISCOUNT:", best);
+
+    if (!best) continue;
+
+    totalDiscount += best.calculatedAmount;
 
     appliedDiscounts.push({
-      type: "PRODUCT_LEVEL",
-      productId: item.productId,
-      productName: item.product?.name,
-      discountType: bestDiscount.discountType,
-      discountValue: bestDiscount.discountValue,
-      amount: bestDiscount.calculatedAmount,
-      description: "Automatic best offer applied"
+      type: "AUTO",
+      productId: item.product.id,
+      discountType: best.discountType,
+      amount: best.calculatedAmount
     });
   }
 
-  const finalTotal = Math.max(0, subtotal - totalDiscount);
-
   return {
-    subtotal: Number(subtotal.toFixed(2)),
-    totalDiscount: Number(totalDiscount.toFixed(2)),
-    finalTotal: Number(finalTotal.toFixed(2)),
+    subtotal,
+    totalDiscount,
+    finalTotal: Math.max(0, subtotal - totalDiscount),
     appliedDiscounts,
-    errors: null,
-    discountCode: null
+    errors: null
   };
 }
 
@@ -1181,30 +1196,26 @@ async applyDiscountToCart(cartItems, userId) {
 // Add this helper method to handle quantity-based discounts properly
 calculateDiscountForItem(discount, price, quantity) {
   switch (discount.discountType) {
-    case 'PERCENTAGE':
-      const percentageDiscount = (price * discount.discountValue) / 100;
-      const cappedDiscount = discount.maxDiscount 
-        ? Math.min(percentageDiscount, discount.maxDiscount) 
-        : percentageDiscount;
-      // For percentage, apply ONCE per product
-      return cappedDiscount;
-      
-    case 'FIXED_AMOUNT':
-      // For fixed amount, apply ONCE per product
+    case "PERCENTAGE":
+      return discount.maxDiscount
+        ? Math.min((price * discount.discountValue) / 100, discount.maxDiscount)
+        : (price * discount.discountValue) / 100;
+
+    case "FIXED_AMOUNT":
       return Math.min(discount.discountValue, price);
-      
-    case 'BUY_X_GET_Y':
-      // For buy X get Y, calculate based on quantity
-      if (discount.minQuantity && quantity >= discount.minQuantity) {
-        const freeItems = Math.floor(quantity / discount.minQuantity);
-        return Math.min(freeItems * discount.discountValue, price * freeItems);
+
+    case "BUY_X_GET_Y":
+    case "QUANTITY_BASED":
+      if (quantity >= discount.minQuantity) {
+        return discount.discountValue; // FLAT ₹
       }
       return 0;
-      
+
     default:
-      return Math.min(discount.discountValue, price);
+      return 0;
   }
 }
+
 // Helper to get best product discount
 getBestProductDiscount(discounts, cartItem) {
   const unitPrice =
@@ -1215,39 +1226,37 @@ getBestProductDiscount(discounts, cartItem) {
   let bestDiscount = null;
   let maxDiscountAmount = 0;
 
-  for (const discount of discounts) {
-    if (
-      discount.minQuantity &&
-      cartItem.quantity < discount.minQuantity
-    ) {
-      continue;
-    }
+  // 1️⃣ QUANTITY BASED (AUTO MODE ONLY)
+  const quantityDiscount = discounts.find(
+    d =>
+      (d.discountType === "BUY_X_GET_Y" ||
+        d.discountType === "QUANTITY_BASED") &&
+      cartItem.quantity >= (d.minQuantity || 0)
+  );
 
+  if (quantityDiscount) {
+    console.log(
+      "🟦 AUTO QUANTITY DISCOUNT:",
+      quantityDiscount.name
+    );
+
+    return {
+      ...quantityDiscount,
+      calculatedAmount: quantityDiscount.discountValue,
+      finalPrice: totalPrice - quantityDiscount.discountValue
+    };
+  }
+
+  // 2️⃣ PRODUCT / CATEGORY % / FIXED
+  for (const discount of discounts) {
     let discountAmount = 0;
 
-    switch (discount.discountType) {
-      case "PERCENTAGE":
-        discountAmount = (totalPrice * discount.discountValue) / 100;
-        if (discount.maxDiscount) {
-          discountAmount = Math.min(
-            discountAmount,
-            discount.maxDiscount
-          );
-        }
-        break;
+    if (discount.discountType === "PERCENTAGE") {
+      discountAmount = (totalPrice * discount.discountValue) / 100;
+    }
 
-      case "FIXED_AMOUNT":
-        discountAmount = Math.min(
-          discount.discountValue,
-          totalPrice
-        );
-        break;
-
-      case "BUY_X_GET_Y":
-        if (cartItem.quantity >= discount.minQuantity) {
-          discountAmount = discount.discountValue;
-        }
-        break;
+    if (discount.discountType === "FIXED_AMOUNT") {
+      discountAmount = discount.discountValue;
     }
 
     if (discountAmount > maxDiscountAmount) {
@@ -1255,7 +1264,7 @@ getBestProductDiscount(discounts, cartItem) {
       bestDiscount = {
         ...discount,
         calculatedAmount: discountAmount,
-        finalPrice: Math.max(0, totalPrice - discountAmount)
+        finalPrice: totalPrice - discountAmount
       };
     }
   }
@@ -1267,170 +1276,131 @@ getBestProductDiscount(discounts, cartItem) {
 
 async validateDiscount(code, userId, orderAmount = 0) {
   try {
-    // Convert orderAmount to number
+    console.log("🟡 validateDiscount() START", {
+      code,
+      userId,
+      orderAmount
+    });
+
     const orderAmt = parseFloat(orderAmount) || 0;
-    
-    // First try to find by name (code)
+    console.log("💰 Parsed order amount:", orderAmt);
+
     let discount = await prisma.discount.findFirst({
       where: {
         name: code,
         isActive: true
-      },
-      include: {
-        product: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        category: {
-          select: {
-            id: true,
-            name: true
-          }
-        },
-        subcategory: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
       }
     });
 
-    // If not found by name, try by ID
     if (!discount) {
-      discount = await prisma.discount.findUnique({
-        where: { 
-          id: code 
-        },
-        include: {
-          product: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
-          category: {
-            select: {
-              id: true,
-              name: true
-            }
-          },
-          subcategory: {
-            select: {
-              id: true,
-              name: true
-            }
-          }
-        }
-      });
-    }
-    
-    if (!discount) {
+      console.log("❌ NO DISCOUNT FOUND FOR CODE:", code);
       return {
         isValid: false,
-        message: 'Invalid discount code'
+        message: "Invalid discount code"
       };
     }
-    
-    // Check if discount is active
-    if (!discount.isActive) {
-      return {
-        isValid: false,
-        message: 'Discount is not active'
-      };
-    }
-    
+
+    console.log("🎯 DISCOUNT FETCHED FROM DB", {
+      id: discount.id,
+      name: discount.name,
+      discountType: discount.discountType,
+      discountValue: discount.discountValue,
+      minOrderAmount: discount.minOrderAmount,
+      maxDiscount: discount.maxDiscount,
+      validFrom: discount.validFrom,
+      validUntil: discount.validUntil
+    });
+
     const now = new Date();
+    console.log("⏰ Current time:", now);
+
     if (now < discount.validFrom) {
-      return {
-        isValid: false,
-        message: 'Discount not yet valid'
-      };
+      console.log("⛔ Coupon not yet valid");
+      return { isValid: false, message: "Discount not yet valid" };
     }
-    
+
     if (now > discount.validUntil) {
-      return {
-        isValid: false,
-        message: 'Discount has expired'
-      };
+      console.log("⛔ Coupon expired");
+      return { isValid: false, message: "Discount expired" };
     }
-    
-    // Check usage limit
-    if (discount.usageLimit && discount.usedCount >= discount.usageLimit) {
-      return {
-        isValid: false,
-        message: 'Discount usage limit reached'
-      };
-    }
-    
-    // Check per user limit
-    if (discount.perUserLimit > 0 && userId) {
-      const userUsageCount = await prisma.discountUsage.count({
-        where: {
-          discountId: discount.id,
-          userId
-        }
+
+    if (discount.minOrderAmount && orderAmt < discount.minOrderAmount) {
+      console.log("⛔ Min order not satisfied", {
+        required: discount.minOrderAmount,
+        current: orderAmt
       });
-      
-      if (userUsageCount >= discount.perUserLimit) {
-        return {
-          isValid: false,
-          message: 'You have reached the usage limit for this discount'
-        };
-      }
-    }
-    
-    // Check minimum order amount
-    const minOrderAmount = discount.minOrderAmount || 0;
-    if (orderAmt < minOrderAmount) {
       return {
         isValid: false,
-        message: `Minimum order amount of ₹${minOrderAmount} required`
+        message: `Minimum order ₹${discount.minOrderAmount} required`
       };
     }
-    
-    // Calculate discount amount
+
+    // 🔥 DISCOUNT CALCULATION DEBUG
     let discountAmount = 0;
     let maxDiscountReached = false;
-    
-    if (discount.discountType === 'PERCENTAGE') {
-      discountAmount = (orderAmt * discount.discountValue) / 100;
-      if (discount.maxDiscount && discountAmount > discount.maxDiscount) {
-        discountAmount = discount.maxDiscount;
-        maxDiscountReached = true;
-      }
-    } else {
-      discountAmount = discount.discountValue;
+
+    console.log("🧮 CALCULATING DISCOUNT FOR TYPE:", discount.discountType);
+
+    switch (discount.discountType) {
+      case "PERCENTAGE":
+        discountAmount = (orderAmt * discount.discountValue) / 100;
+        console.log("🟢 Percentage raw amount:", discountAmount);
+
+        if (discount.maxDiscount) {
+          console.log("🔒 Max discount allowed:", discount.maxDiscount);
+          if (discountAmount > discount.maxDiscount) {
+            discountAmount = discount.maxDiscount;
+            maxDiscountReached = true;
+            console.log("⚠ Max discount reached, capped to:", discountAmount);
+          }
+        }
+        break;
+
+      case "FIXED_AMOUNT":
+        discountAmount = discount.discountValue;
+        console.log("🟠 Fixed amount discount:", discountAmount);
+        break;
+
+      case "BUY_X_GET_Y":
+      case "QUANTITY_BASED":
+        discountAmount = discount.discountValue;
+        console.log("🔵 Quantity based discount (FLAT):", discountAmount);
+        break;
+
+      default:
+        console.log("⚠ Unknown discount type");
+        discountAmount = 0;
     }
-    
+
+    console.log("✅ FINAL DISCOUNT RESULT", {
+      discountType: discount.discountType,
+      discountAmount,
+      maxDiscountReached
+    });
+
     return {
       isValid: true,
       discount: {
         id: discount.id,
         name: discount.name,
-        description: discount.description,
         discountType: discount.discountType,
         discountValue: discount.discountValue,
-        maxDiscount: discount.maxDiscount,
         discountAmount,
         maxDiscountReached,
-        minOrderAmount: discount.minOrderAmount || 0,
-        product: discount.product,
-        category: discount.category,
-        subcategory: discount.subcategory
+        minOrderAmount: discount.minOrderAmount || 0
       }
     };
-    
+
   } catch (error) {
-    logger.error('Error validating discount:', error);
+    console.error("🔥 validateDiscount ERROR", error);
     return {
       isValid: false,
-      message: 'Error validating discount code'
+      message: "Error validating discount"
     };
   }
 }
+
+
 
 
 async calculateFinalAmountWithDiscounts(cartData, userId, discountCode = null) {
